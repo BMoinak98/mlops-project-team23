@@ -1,0 +1,47 @@
+name: Build, Sync, and Deploy Stack
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push App Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./app
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/my-python-app:latest
+
+      - name: Copy Stack Configuration to Target Server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "dags/,config/,docker-compose.yml"
+          target: "/opt/my-pipeline/"
+
+      - name: Deploy Services via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /opt/my-pipeline
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker pull ghcr.io/${{ github.repository_owner }}/my-python-app:latest
+            docker compose up -d --remove-orphans
