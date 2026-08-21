@@ -68,7 +68,7 @@ services:
       - mlops-net
 
   airflow-webserver:
-    image: ghcr.io/${GITHUB_REPOSITORY}/airflow:latest
+    image: ghcr.io/bmoinak98/mlops-project-team23/airflow:latest
     container_name: airflow-webserver
     restart: always
     depends_on:
@@ -91,7 +91,7 @@ services:
     command: webserver
 
   airflow-scheduler:
-    image: ghcr.io/${GITHUB_REPOSITORY}/airflow:latest
+    image: ghcr.io/bmoinak98/mlops-project-team23/airflow:latest
     container_name: airflow-scheduler
     restart: always
     depends_on:
@@ -112,7 +112,7 @@ services:
 
   # --- APPLICATION SERVING ---
   fastapi:
-    image: ghcr.io/${GITHUB_REPOSITORY}/fastapi:latest
+    image: ghcr.io/bmoinak98/mlops-project-team23/fastapi:latest
     container_name: fastapi
     restart: always
     ports:
