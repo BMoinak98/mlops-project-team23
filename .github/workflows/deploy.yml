@@ -1,176 +1,207 @@
-name: Manual Component Deployment
+name: CI/CD Pipeline
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
-      commit_sha:
-        description: 'Git Commit SHA to deploy/rollback (leave empty for main HEAD)'
-        required: false
-        type: string
-      # Infra Deployments
-      airflow_deploy:
-        description: 'INFRA: Deploy Airflow Service'
+      # Infrastructure Deployments
+      deploy_infra_db:
+        description: 'INFRA: Deploy PostgreSQL Container'
         type: boolean
         default: false
-      db_deploy:
-        description: 'INFRA: Deploy PostgreSQL DB'
+      deploy_infra_mlflow:
+        description: 'INFRA: Deploy MLflow Container'
         type: boolean
         default: false
-      observability_deploy:
+      deploy_infra_obsv:
         description: 'INFRA: Deploy Grafana & Prometheus'
         type: boolean
         default: false
+      deploy_infra_airflow:
+        description: 'INFRA: Deploy Airflow Containers'
+        type: boolean
+        default: false
+      deploy_infra_mlcode:
+        description: 'INFRA: Pull ML-Runner Image on Host'
+        type: boolean
+        default: false
+      deploy_infra_api:
+        description: 'INFRA: Deploy FastAPI Container'
+        type: boolean
+        default: false
       # Code Deployments
-      dag_deploy:
-        description: 'CODE: Sync Airflow DAGs'
+      deploy_code_ml:
+        description: 'CODE: Sync ML Scripts to Mounts'
         type: boolean
         default: false
-      app_deploy:
-        description: 'CODE: Build & Deploy ML Runner Image'
+      deploy_code_dag:
+        description: 'CODE: Sync DAG Files to Mounts'
         type: boolean
         default: false
-      api_deploy:
-        description: 'CODE: Build & Deploy FastAPI Service'
-        type: boolean
-        default: false
-      obs_metrics_deploy:
-        description: 'CODE: Reload Prometheus Configs'
+      deploy_code_api:
+        description: 'CODE: Sync FastAPI Code to Mounts'
         type: boolean
         default: false
 
 jobs:
-  # --- INFRASTRUCTURE JOBS ---
-  airflow_deploy:
-    if: inputs.airflow_deploy == true
+  # --- AUTOMATED IMAGE BUILD & PUSH (Runs on every push to main) ---
+  build_and_push_images:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build & Deploy Airflow Core
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Build & Push Images
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
           docker build -t ghcr.io/${{ github.repository }}/airflow:latest -f docker/Dockerfile.airflow .
+          docker build -t ghcr.io/${{ github.repository }}/ml-runner:latest -f docker/Dockerfile.ml .
+          docker build -t ghcr.io/${{ github.repository }}/fastapi:latest -f docker/Dockerfile.api .
+          
           docker push ghcr.io/${{ github.repository }}/airflow:latest
-      - name: SSH Checkout Commit & Restart Airflow
+          docker push ghcr.io/${{ github.repository }}/ml-runner:latest
+          docker push ghcr.io/${{ github.repository }}/fastapi:latest
+
+  # --- INFRASTRUCTURE MANUAL JOBS ---
+  deploy_infra_db:
+    if: inputs.deploy_infra_db == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy Postgres
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /home/da25m591/mlops-project
-            git fetch origin
-            git checkout ${{ inputs.commit_sha || github.sha }}
+            cd /home/da25m591/project
+            docker compose up -d postgres
+
+  deploy_infra_mlflow:
+    if: inputs.deploy_infra_mlflow == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy MLflow
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/da25m591/project
+            docker compose up -d mlflow
+
+  deploy_infra_obsv:
+    if: inputs.deploy_infra_obsv == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy Observability
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/da25m591/project
+            docker compose up -d prometheus grafana
+
+  deploy_infra_airflow:
+    if: inputs.deploy_infra_airflow == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy Airflow Infrastructure
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/da25m591/project
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull airflow-webserver airflow-scheduler
             AIRFLOW__CORE__FERNET_KEY="${{ secrets.FERNET_KEY }}" docker compose up -d --no-deps airflow-webserver airflow-scheduler
 
-  db_deploy:
-    if: inputs.db_deploy == true
+  deploy_infra_mlcode:
+    if: inputs.deploy_infra_mlcode == true
     runs-on: ubuntu-latest
     steps:
-      - name: SSH Checkout Commit & Deploy Postgres
+      - name: Pull ML-Runner Image
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /home/da25m591/mlops-project
-            git fetch origin
-            git checkout ${{ inputs.commit_sha || github.sha }}
-            docker compose up -d postgres
-
-  observability_deploy:
-    if: inputs.observability_deploy == true
-    runs-on: ubuntu-latest
-    steps:
-      - name: SSH Checkout Commit & Deploy Grafana/Prometheus
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd /home/da25m591/mlops-project
-            git fetch origin
-            git checkout ${{ inputs.commit_sha || github.sha }}
-            docker compose up -d prometheus grafana
-
-  # --- CODE JOBS ---
-  dag_deploy:
-    if: inputs.dag_deploy == true
-    runs-on: ubuntu-latest
-    steps:
-      - name: SSH Checkout Commit for DAGs
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd /home/da25m591/mlops-project
-            git fetch origin
-            git checkout ${{ inputs.commit_sha || github.sha }}
-
-  app_deploy:
-    if: inputs.app_deploy == true
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build & Push ML Runner Container
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          docker build -t ghcr.io/${{ github.repository }}/ml-runner:latest -f docker/Dockerfile.ml .
-          docker push ghcr.io/${{ github.repository }}/ml-runner:latest
-      - name: SSH Pull ML Runner
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd /home/da25m591/mlops-project
-            git fetch origin
-            git checkout ${{ inputs.commit_sha || github.sha }}
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker pull ghcr.io/${{ github.repository }}/ml-runner:latest
 
-  api_deploy:
-    if: inputs.api_deploy == true
+  deploy_infra_api:
+    if: inputs.deploy_infra_api == true
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Build & Push FastAPI Container
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          docker build -t ghcr.io/${{ github.repository }}/fastapi:latest -f docker/Dockerfile.api .
-          docker push ghcr.io/${{ github.repository }}/fastapi:latest
-      - name: SSH Reload FastAPI
+      - name: Deploy FastAPI Infrastructure
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /home/da25m591/mlops-project
-            git fetch origin
-            git checkout ${{ inputs.commit_sha || github.sha }}
+            cd /home/da25m591/project
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull fastapi
             docker compose up -d --no-deps fastapi
 
-  obs_metrics_deploy:
-    if: inputs.obs_metrics_deploy == true
+  # --- CODE SYNC MANUAL JOBS ---
+  deploy_code_dag:
+    if: inputs.deploy_code_dag == true
     runs-on: ubuntu-latest
     steps:
-      - name: SSH Checkout Commit & Reload Prometheus Config
+      - name: Pull Main & Copy DAG Files to Mount Directory
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /home/da25m591/mlops-project
-            git fetch origin
-            git checkout ${{ inputs.commit_sha || github.sha }}
-            docker compose exec -T prometheus kill -SIGHUP 1
+            cd /home/da25m591/project
+            git checkout main
+            git pull origin main
+            mkdir -p /home/da25m591/mounts/dags
+            cp -r /home/da25m591/project/dags/* /home/da25m591/mounts/dags/
+
+  deploy_code_ml:
+    if: inputs.deploy_code_ml == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull Main & Copy ML Code to Mount Directory
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/da25m591/project
+            git checkout main
+            git pull origin main
+            mkdir -p /home/da25m591/mounts/src/data_engineering /home/da25m591/mounts/src/training
+            cp -r /home/da25m591/project/src/data_engineering/* /home/da25m591/mounts/src/data_engineering/
+            cp -r /home/da25m591/project/src/training/* /home/da25m591/mounts/src/training/
+
+  deploy_code_api:
+    if: inputs.deploy_code_api == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull Main & Copy API Code to Mount Directory
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/da25m591/project
+            git checkout main
+            git pull origin main
+            mkdir -p /home/da25m591/mounts/src/api
+            cp -r /home/da25m591/project/src/api/* /home/da25m591/mounts/src/api/

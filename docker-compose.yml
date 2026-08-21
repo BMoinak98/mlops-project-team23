@@ -11,7 +11,7 @@ volumes:
   grafana_data:
 
 services:
-  # --- INFRASTRUCTURE DEPLOYMENT ---
+  # --- INFRASTRUCTURE SERVICES ---
   postgres:
     image: postgres:15-alpine
     container_name: postgres
@@ -31,13 +31,25 @@ services:
       timeout: 5s
       retries: 5
 
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.16.2
+    container_name: mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_data:/mlflow
+    command: >
+      mlflow server --backend-store-uri sqlite:////mlflow/mlflow.db --default-artifact-root /mlflow/artifacts --host 0.0.0.0 --port 5000
+    networks:
+      - mlops-net
+
   prometheus:
     image: prom/prometheus:v2.54.0
     container_name: prometheus
     ports:
       - "9090:9090"
     volumes:
-      - /home/da25m591/mlops-project/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - /home/da25m591/mounts/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -70,9 +82,10 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - /home/da25m591/mlops-project/dags:/opt/airflow/dags
+      - /home/da25m591/mounts/dags:/opt/airflow/dags
       - /var/run/docker.sock:/var/run/docker.sock
       - /home/da25m591/data:/opt/data
+      - /home/da25m591/mounts/src:/app/src
     networks:
       - mlops-net
     command: webserver
@@ -89,26 +102,15 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
     volumes:
-      - /home/da25m591/mlops-project/dags:/opt/airflow/dags
+      - /home/da25m591/mounts/dags:/opt/airflow/dags
       - /var/run/docker.sock:/var/run/docker.sock
       - /home/da25m591/data:/opt/data
+      - /home/da25m591/mounts/src:/app/src
     networks:
       - mlops-net
     command: scheduler
 
-  # --- CODE / APPLICATION DEPLOYMENT ---
-  mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.16.2
-    container_name: mlflow
-    ports:
-      - "5000:5000"
-    volumes:
-      - mlflow_data:/mlflow
-    command: >
-      mlflow server --backend-store-uri sqlite:////mlflow/mlflow.db --default-artifact-root /mlflow/artifacts --host 0.0.0.0 --port 5000
-    networks:
-      - mlops-net
-
+  # --- APPLICATION SERVING ---
   fastapi:
     image: ghcr.io/${GITHUB_REPOSITORY}/fastapi:latest
     container_name: fastapi
@@ -118,5 +120,8 @@ services:
     environment:
       MLFLOW_TRACKING_URI: http://mlflow:5000
       DATABASE_URL: postgresql://mlops_user:mlops_password@postgres:5432/mlops_db
+    volumes:
+      - /home/da25m591/mounts/src/api:/app/api
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
     networks:
       - mlops-net
