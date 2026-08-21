@@ -110,6 +110,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            mkdir -p /home/da25m591/project
             cd /home/da25m591/project
             docker compose up -d postgres
 
@@ -124,6 +125,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            mkdir -p /home/da25m591/project
             cd /home/da25m591/project
             docker compose up -d mlflow
 
@@ -138,6 +140,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            mkdir -p /home/da25m591/project
             cd /home/da25m591/project
             docker compose up -d prometheus grafana
 
@@ -152,6 +155,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            mkdir -p /home/da25m591/project
             cd /home/da25m591/project
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull airflow-webserver airflow-scheduler
@@ -182,6 +186,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            mkdir -p /home/da25m591/project
             cd /home/da25m591/project
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull fastapi
@@ -199,6 +204,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            mkdir -p /home/da25m591/project
             cd /home/da25m591/project
             git checkout main
             git pull origin main
@@ -216,6 +222,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            mkdir -p /home/da25m591/project
             cd /home/da25m591/project
             git checkout main
             git pull origin main
@@ -234,6 +241,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            mkdir -p /home/da25m591/project
             cd /home/da25m591/project
             git checkout main
             git pull origin main
