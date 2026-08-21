@@ -31,6 +31,19 @@ on:
         description: 'INFRA: Deploy FastAPI Container'
         type: boolean
         default: false
+      # Image Builds
+      build_airflow_image:
+        description: 'BUILD: Build & Push Airflow Image'
+        type: boolean
+        default: false
+      build_mlrunner_image:
+        description: 'BUILD: Build & Push ML-Runner Image'
+        type: boolean
+        default: false
+      build_fastapi_image:
+        description: 'BUILD: Build & Push FastAPI Image'
+        type: boolean
+        default: false
       # Code Deployments
       deploy_code_ml:
         description: 'CODE: Sync ML Scripts to Mounts'
@@ -46,22 +59,43 @@ on:
         default: false
 
 jobs:
-  # --- AUTOMATED IMAGE BUILD & PUSH (Runs on every push to main) ---
-  build_and_push_images:
-    if: github.event_name == 'push'
+  # --- IMAGE BUILDS (parallel) ---
+  # Each job runs on: push to main  OR  manual dispatch with its checkbox ticked
+
+  build_airflow_image:
+    if: github.event_name == 'push' || inputs.build_airflow_image == true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-      - name: Build & Push Images
+      - name: Build & Push Airflow Image
         run: |
           docker build -t ghcr.io/bmoinak98/mlops-project-team23/airflow:latest -f docker/Dockerfile.airflow .
-          docker build -t ghcr.io/bmoinak98/mlops-project-team23/ml-runner:latest -f docker/Dockerfile.mlcode .
-          docker build -t ghcr.io/bmoinak98/mlops-project-team23/fastapi:latest -f docker/Dockerfile.api .
-          
           docker push ghcr.io/bmoinak98/mlops-project-team23/airflow:latest
+
+  build_mlrunner_image:
+    if: github.event_name == 'push' || inputs.build_mlrunner_image == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Build & Push ML-Runner Image
+        run: |
+          docker build -t ghcr.io/bmoinak98/mlops-project-team23/ml-runner:latest -f docker/Dockerfile.mlcode .
           docker push ghcr.io/bmoinak98/mlops-project-team23/ml-runner:latest
+
+  build_fastapi_image:
+    if: github.event_name == 'push' || inputs.build_fastapi_image == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Build & Push FastAPI Image
+        run: |
+          docker build -t ghcr.io/bmoinak98/mlops-project-team23/fastapi:latest -f docker/Dockerfile.api .
           docker push ghcr.io/bmoinak98/mlops-project-team23/fastapi:latest
 
   # --- INFRASTRUCTURE MANUAL JOBS ---
