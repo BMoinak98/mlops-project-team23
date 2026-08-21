@@ -1,61 +1,122 @@
 version: '3.8'
 
+networks:
+  mlops-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mlflow_data:
+  prometheus_data:
+  grafana_data:
+
 services:
+  # --- INFRASTRUCTURE DEPLOYMENT ---
   postgres:
     image: postgres:15-alpine
+    container_name: postgres
     environment:
-      - POSTGRES_USER=airflow
-      - POSTGRES_PASSWORD=airflow
-      - POSTGRES_DB=airflow
-    volumes:
-      - postgres-db-data:/var/lib/postgresql/data
-    restart: always
-
-  airflow-webserver:
-    image: apache/airflow:2.10.0-python3.11
-    command: webserver
+      POSTGRES_USER: mlops_user
+      POSTGRES_PASSWORD: mlops_password
+      POSTGRES_DB: mlops_db
     ports:
-      - "8080:8080"
-    environment:
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
-      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - "5432:5432"
     volumes:
-      - ./dags:/opt/airflow/dags
-      - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
-      - postgres
-    restart: always
-
-  airflow-scheduler:
-    image: apache/airflow:2.10.0-python3.11
-    command: scheduler
-    environment:
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
-      - AIRFLOW__CORE__LOAD_EXAMPLES=False
-    volumes:
-      - ./dags:/opt/airflow/dags
-      - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
-      - postgres
-    restart: always
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - mlops-net
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U mlops_user -d mlops_db" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.54.0
+    container_name: prometheus
     ports:
       - "9090:9090"
     volumes:
-      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
-    restart: always
+      - /home/da25m591/mlops-project/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--web.enable-lifecycle'
+    networks:
+      - mlops-net
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.1.0
+    container_name: grafana
     ports:
       - "3000:3000"
-    depends_on:
-      - prometheus
-    restart: always
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - mlops-net
 
-volumes:
-  postgres-db-data:
+  airflow-webserver:
+    image: ghcr.io/${GITHUB_REPOSITORY}/airflow:latest
+    container_name: airflow-webserver
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlops_user:mlops_password@postgres:5432/mlops_db
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+    ports:
+      - "8080:8080"
+    volumes:
+      - /home/da25m591/mlops-project/dags:/opt/airflow/dags
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home/da25m591/data:/opt/data
+    networks:
+      - mlops-net
+    command: webserver
+
+  airflow-scheduler:
+    image: ghcr.io/${GITHUB_REPOSITORY}/airflow:latest
+    container_name: airflow-scheduler
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlops_user:mlops_password@postgres:5432/mlops_db
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
+    volumes:
+      - /home/da25m591/mlops-project/dags:/opt/airflow/dags
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home/da25m591/data:/opt/data
+    networks:
+      - mlops-net
+    command: scheduler
+
+  # --- CODE / APPLICATION DEPLOYMENT ---
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.16.2
+    container_name: mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_data:/mlflow
+    command: >
+      mlflow server --backend-store-uri sqlite:////mlflow/mlflow.db --default-artifact-root /mlflow/artifacts --host 0.0.0.0 --port 5000
+    networks:
+      - mlops-net
+
+  fastapi:
+    image: ghcr.io/${GITHUB_REPOSITORY}/fastapi:latest
+    container_name: fastapi
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      DATABASE_URL: postgresql://mlops_user:mlops_password@postgres:5432/mlops_db
+    networks:
+      - mlops-net

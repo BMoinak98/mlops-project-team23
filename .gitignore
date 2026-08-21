@@ -1,2 +1,4 @@
 # Dataset
 data/
+.vscode
+.venv/

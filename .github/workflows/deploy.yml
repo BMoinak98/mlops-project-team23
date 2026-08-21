@@ -1,47 +1,176 @@
-name: Build, Sync, and Deploy Stack
+name: Manual Component Deployment
 
 on:
-  push:
-    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: 'Git Commit SHA to deploy/rollback (leave empty for main HEAD)'
+        required: false
+        type: string
+      # Infra Deployments
+      airflow_deploy:
+        description: 'INFRA: Deploy Airflow Service'
+        type: boolean
+        default: false
+      db_deploy:
+        description: 'INFRA: Deploy PostgreSQL DB'
+        type: boolean
+        default: false
+      observability_deploy:
+        description: 'INFRA: Deploy Grafana & Prometheus'
+        type: boolean
+        default: false
+      # Code Deployments
+      dag_deploy:
+        description: 'CODE: Sync Airflow DAGs'
+        type: boolean
+        default: false
+      app_deploy:
+        description: 'CODE: Build & Deploy ML Runner Image'
+        type: boolean
+        default: false
+      api_deploy:
+        description: 'CODE: Build & Deploy FastAPI Service'
+        type: boolean
+        default: false
+      obs_metrics_deploy:
+        description: 'CODE: Reload Prometheus Configs'
+        type: boolean
+        default: false
 
 jobs:
-  build-and-deploy:
+  # --- INFRASTRUCTURE JOBS ---
+  airflow_deploy:
+    if: inputs.airflow_deploy == true
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and Push App Image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./app
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/my-python-app:latest
-
-      - name: Copy Stack Configuration to Target Server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "dags/,config/,docker-compose.yml"
-          target: "/opt/my-pipeline/"
-
-      - name: Deploy Services via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - uses: actions/checkout@v4
+      - name: Build & Deploy Airflow Core
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          docker build -t ghcr.io/${{ github.repository }}/airflow:latest -f docker/Dockerfile.airflow .
+          docker push ghcr.io/${{ github.repository }}/airflow:latest
+      - name: SSH Checkout Commit & Restart Airflow
+        uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /opt/my-pipeline
+            cd /home/da25m591/mlops-project
+            git fetch origin
+            git checkout ${{ inputs.commit_sha || github.sha }}
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker pull ghcr.io/${{ github.repository_owner }}/my-python-app:latest
-            docker compose up -d --remove-orphans
+            docker compose pull airflow-webserver airflow-scheduler
+            AIRFLOW__CORE__FERNET_KEY="${{ secrets.FERNET_KEY }}" docker compose up -d --no-deps airflow-webserver airflow-scheduler
+
+  db_deploy:
+    if: inputs.db_deploy == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH Checkout Commit & Deploy Postgres
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/da25m591/mlops-project
+            git fetch origin
+            git checkout ${{ inputs.commit_sha || github.sha }}
+            docker compose up -d postgres
+
+  observability_deploy:
+    if: inputs.observability_deploy == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH Checkout Commit & Deploy Grafana/Prometheus
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/da25m591/mlops-project
+            git fetch origin
+            git checkout ${{ inputs.commit_sha || github.sha }}
+            docker compose up -d prometheus grafana
+
+  # --- CODE JOBS ---
+  dag_deploy:
+    if: inputs.dag_deploy == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH Checkout Commit for DAGs
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/da25m591/mlops-project
+            git fetch origin
+            git checkout ${{ inputs.commit_sha || github.sha }}
+
+  app_deploy:
+    if: inputs.app_deploy == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build & Push ML Runner Container
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          docker build -t ghcr.io/${{ github.repository }}/ml-runner:latest -f docker/Dockerfile.ml .
+          docker push ghcr.io/${{ github.repository }}/ml-runner:latest
+      - name: SSH Pull ML Runner
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/da25m591/mlops-project
+            git fetch origin
+            git checkout ${{ inputs.commit_sha || github.sha }}
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker pull ghcr.io/${{ github.repository }}/ml-runner:latest
+
+  api_deploy:
+    if: inputs.api_deploy == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build & Push FastAPI Container
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          docker build -t ghcr.io/${{ github.repository }}/fastapi:latest -f docker/Dockerfile.api .
+          docker push ghcr.io/${{ github.repository }}/fastapi:latest
+      - name: SSH Reload FastAPI
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/da25m591/mlops-project
+            git fetch origin
+            git checkout ${{ inputs.commit_sha || github.sha }}
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker compose pull fastapi
+            docker compose up -d --no-deps fastapi
+
+  obs_metrics_deploy:
+    if: inputs.obs_metrics_deploy == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH Checkout Commit & Reload Prometheus Config
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/da25m591/mlops-project
+            git fetch origin
+            git checkout ${{ inputs.commit_sha || github.sha }}
+            docker compose exec -T prometheus kill -SIGHUP 1
