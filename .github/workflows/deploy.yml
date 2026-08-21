@@ -57,7 +57,7 @@ jobs:
       - name: Build & Push Images
         run: |
           docker build -t ghcr.io/bmoinak98/mlops-project-team23/airflow:latest -f docker/Dockerfile.airflow .
-          docker build -t ghcr.io/bmoinak98/mlops-project-team23/ml-runner:latest -f docker/Dockerfile.ml .
+          docker build -t ghcr.io/bmoinak98/mlops-project-team23/ml-runner:latest -f docker/Dockerfile.mlcode .
           docker build -t ghcr.io/bmoinak98/mlops-project-team23/fastapi:latest -f docker/Dockerfile.api .
           
           docker push ghcr.io/bmoinak98/mlops-project-team23/airflow:latest
