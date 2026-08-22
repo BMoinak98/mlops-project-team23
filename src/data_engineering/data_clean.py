@@ -215,6 +215,7 @@ df = df.withColumn(
 
 df = df.drop("customerID", "Churn")
 
+df = df.localCheckpoint()
 
 # ============================================================
 # 9. CHECK CLASS DISTRIBUTION
@@ -232,7 +233,6 @@ print("Class distribution:")
       .show()
 )
 
-df = df.localCheckpoint()
 # ============================================================
 # 10. TRAIN / TEST SPLIT
 # ============================================================
