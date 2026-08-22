@@ -61,8 +61,7 @@ df.show(5, truncate=False)
 # ============================================================
 
 # Remove unnecessary whitespace
-for column in df.columns:
-    df = df.withColumn(column, trim(col(column)))
+df = df.select([trim(col(c)).alias(c) for c in df.columns])
 
 
 # TotalCharges is known to contain blank values in this dataset.
@@ -128,10 +127,8 @@ for c in numeric_columns:
 
 
 # Categorical missing values -> "Unknown"
-for c in categorical_columns:
-    df = df.fillna(
-        {c: "Unknown"}
-    )
+cat_defaults = {c: "Unknown" for c in categorical_columns}
+df = df.fillna(cat_defaults)
 
 
 # ============================================================
@@ -235,7 +232,7 @@ print("Class distribution:")
       .show()
 )
 
-
+df = df.localCheckpoint()
 # ============================================================
 # 10. TRAIN / TEST SPLIT
 # ============================================================
