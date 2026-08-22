@@ -1,6 +1,8 @@
 # ============================================================
 # TELCO CUSTOMER CHURN - APACHE SPARK DATA CLEANING
 # ============================================================
+import os
+import shutil
 from pathlib import Path
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
@@ -31,6 +33,8 @@ spark = (
     SparkSession.builder
     .appName("TelcoCustomerChurn_data_clean")
     .master("local[*]")
+    .config("spark.driver.memory", "1g")
+    .config("spark.executor.memory", "1g")
     .getOrCreate()
 )
 
@@ -45,7 +49,7 @@ df = (
     .option("header", True)
     .option("inferSchema", True)
     .csv(str(DATA_PATH))
-)
+).cache()
 
 print("Initial records:", df.count())
 df.printSchema()
@@ -235,6 +239,9 @@ print("Class distribution:")
 # ============================================================
 # 10. TRAIN / TEST SPLIT
 # ============================================================
+for path_str in [str(TRAIN_PATH), str(TEST_PATH)]:
+    if os.path.exists(path_str):
+        shutil.rmtree(path_str, ignore_errors=True)
 
 train_df, test_df = df.randomSplit(
     [0.8, 0.2],
