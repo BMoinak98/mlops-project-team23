@@ -43,6 +43,12 @@ services:
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
       AIRFLOW__WEBSERVER__SECRET_KEY: airflow_secret
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 1g
     networks:
       - mlops-net
     command:
@@ -51,6 +57,7 @@ services:
       - |
         airflow db migrate && \
         airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin || true
+
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.16.2
     container_name: mlflow
@@ -112,6 +119,12 @@ services:
       - /home/da25m591/data:/opt/data
       - /home/da25m591/project/src:/app/src
       - /home/da25m591/project/config:/app/config
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+        reservations:
+          memory: 2g
     networks:
       - mlops-net
     command: webserver
@@ -138,6 +151,12 @@ services:
       - /home/da25m591/data:/opt/data
       - /home/da25m591/project/src:/app/src
       - /home/da25m591/project/config:/app/config
+    deploy:
+      resources:
+        limits:
+          memory: 8g
+        reservations:
+          memory: 4g
     networks:
       - mlops-net
     command: scheduler
