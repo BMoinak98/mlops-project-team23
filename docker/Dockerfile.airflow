@@ -1,7 +1,7 @@
 FROM apache/airflow:2.10.0-python3.11
 USER root
-RUN apt-get update && apt-get install -y docker.io git ssh && apt-get clean
-RUN usermod -aG root,sudo airflow
+RUN apt-get update && apt-get install -y openjdk-21-jre-headless git ssh && apt-get clean
+ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 USER airflow
 COPY requirements/airflow-requirements.txt /requirements.txt
 RUN pip install --no-cache-dir -r /requirements.txt

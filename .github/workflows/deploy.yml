@@ -24,12 +24,8 @@ on:
         description: 'INFRA: Deploy Grafana & Prometheus'
         type: boolean
         default: false
-      deploy_infra_airflow:
-        description: 'INFRA: Deploy Airflow Containers'
-        type: boolean
-        default: false
-      deploy_infra_mlcode:
-        description: 'INFRA: Pull ML-Runner Image on Host'
+      deploy_infra_runtime:
+        description: 'INFRA: Deploy Airflow Runtime Containers'
         type: boolean
         default: false
       deploy_infra_api:
@@ -39,10 +35,6 @@ on:
       # Image Builds
       build_airflow_image:
         description: 'BUILD: Build & Push Airflow Image'
-        type: boolean
-        default: false
-      build_mlrunner_image:
-        description: 'BUILD: Build & Push ML-Runner Image'
         type: boolean
         default: false
       build_fastapi_image:
@@ -89,7 +81,7 @@ jobs:
           password: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "docker-compose.yml,config/config-docker.yml"
           target: "/home/da25m591/project/"
-      
+
   # --- IMAGE BUILDS (parallel) ---
   build_airflow_image:
     if: github.event_name == 'push' || inputs.build_airflow_image == true
@@ -102,18 +94,6 @@ jobs:
         run: |
           docker build -t ghcr.io/bmoinak98/mlops-project-team23/airflow:latest -f docker/Dockerfile.airflow .
           docker push ghcr.io/bmoinak98/mlops-project-team23/airflow:latest
-
-  build_mlrunner_image:
-    if: github.event_name == 'push' || inputs.build_mlrunner_image == true
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Log in to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-      - name: Build & Push ML-Runner Image
-        run: |
-          docker build -t ghcr.io/bmoinak98/mlops-project-team23/ml-runner:latest -f docker/Dockerfile.mlcode .
-          docker push ghcr.io/bmoinak98/mlops-project-team23/ml-runner:latest
 
   build_fastapi_image:
     if: github.event_name == 'push' || inputs.build_fastapi_image == true
@@ -173,8 +153,8 @@ jobs:
             cd /home/da25m591/project
             docker compose up -d prometheus grafana
 
-  deploy_infra_airflow:
-    if: inputs.deploy_infra_airflow == true
+  deploy_infra_runtime:
+    if: inputs.deploy_infra_runtime == true
     runs-on: ubuntu-latest
     steps:
       - name: Deploy Airflow Infrastructure
@@ -190,20 +170,6 @@ jobs:
             docker compose pull airflow-init
             AIRFLOW__CORE__FERNET_KEY="${{ secrets.FERNET_KEY }}" docker compose up airflow-init
             AIRFLOW__CORE__FERNET_KEY="${{ secrets.FERNET_KEY }}" docker compose up -d --no-deps airflow-webserver airflow-scheduler
-
-  deploy_infra_mlcode:
-    if: inputs.deploy_infra_mlcode == true
-    runs-on: ubuntu-latest
-    steps:
-      - name: Pull ML-Runner Image
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          password: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker pull ghcr.io/bmoinak98/mlops-project-team23/ml-runner:latest
 
   deploy_infra_api:
     if: inputs.deploy_infra_api == true

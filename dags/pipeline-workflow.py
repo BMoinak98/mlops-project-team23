@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta
 from airflow import DAG
-from airflow.providers.docker.operators.docker import DockerOperator
-from docker.types import Mount
+from airflow.operators.bash import BashOperator
 
 default_args = {
     'owner': 'team23',
@@ -19,36 +18,25 @@ with DAG(
     start_date=datetime(2026, 1, 1),
     schedule='@daily',
     catchup=False,
-    tags=['mlops', 'spark', 'mlflow', 'docker']
+    tags=['mlops', 'spark', 'mlflow']
 ) as dag:
 
-    # Common DockerOperator configurations
-    docker_operator_kwargs = {
-        'image': 'ghcr.io/bmoinak98/mlops-project-team23/ml-runner:latest',
-        'auto_remove': 'success',
-        'docker_url': 'unix:///var/run/docker.sock',
-        'network_mode': 'mlops-net',
-        'working_dir': '/app/src/data_engineering',
-        'environment': {
-            'PYTHONPATH': '/app/src/data_engineering',
-        },
-        'mounts': [
-            Mount(source='/home/da25m591/data', target='/data', type='bind'),
-            Mount(source='/home/da25m591/project/src/data_engineering', target='/app/src/data_engineering', type='bind'),
-            Mount(source='/home/da25m591/project/config', target='/app/config', type='bind'),
-        ],
-    }
-
-    data_cleaning_task = DockerOperator(
+    data_cleaning_task = BashOperator(
         task_id='data_cleaning',
-        command='python3 /app/src/data_engineering/data_clean.py --config /app/config/config-docker.yml',
-        **docker_operator_kwargs
+        bash_command='python3 /app/src/data_engineering/data_clean.py --config /app/config/config-docker.yml',
+        env={
+            'PYTHONPATH': '/app/src/data_engineering',
+            'MLFLOW_TRACKING_URI': 'http://mlflow:6091',
+        }
     )
 
-    model_training_task = DockerOperator(
+    model_training_task = BashOperator(
         task_id='model_training',
-        command='python3 /app/src/data_engineering/model_train.py --config /app/config/config-docker.yml',
-        **docker_operator_kwargs
+        bash_command='python3 /app/src/data_engineering/model_train.py --config /app/config/config-docker.yml',
+        env={
+            'PYTHONPATH': '/app/src/data_engineering',
+            'MLFLOW_TRACKING_URI': 'http://mlflow:6091',
+        }
     )
 
     data_cleaning_task >> model_training_task
