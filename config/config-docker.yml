@@ -1,10 +1,10 @@
 # ============================================================
 # Docker Execution Configuration
 # ============================================================
-data_dir: "/data"
-raw_data_path: "/data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv"
-train_data_path: "/data/processed/train"
-test_data_path: "/data/processed/test"
+data_dir: "/opt/data"
+raw_data_path: "/opt/data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv"
+train_data_path: "/opt/data/processed/train"
+test_data_path: "/opt/data/processed/test"
 
 mlflow:
   tracking_uri: "http://mlflow:6091"
