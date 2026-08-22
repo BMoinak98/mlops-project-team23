@@ -20,7 +20,7 @@ services:
       POSTGRES_PASSWORD: mlops_password
       POSTGRES_DB: mlops_db
     ports:
-      - "5432:5432"
+      - "5911:5911"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -35,11 +35,11 @@ services:
     image: ghcr.io/mlflow/mlflow:v2.16.2
     container_name: mlflow
     ports:
-      - "5000:5000"
+      - "6091:6091"
     volumes:
       - mlflow_data:/mlflow
     command: >
-      mlflow server --backend-store-uri sqlite:////mlflow/mlflow.db --default-artifact-root /mlflow/artifacts --host 0.0.0.0 --port 5000
+      mlflow server --backend-store-uri sqlite:////mlflow/mlflow.db --default-artifact-root /mlflow/artifacts --host 0.0.0.0 --port 6091
     networks:
       - mlops-net
 
@@ -47,7 +47,7 @@ services:
     image: prom/prometheus:v2.54.0
     container_name: prometheus
     ports:
-      - "9090:9090"
+      - "5912:5912"
     volumes:
       - /home/da25m591/project/config/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
@@ -61,7 +61,7 @@ services:
     image: grafana/grafana:11.1.0
     container_name: grafana
     ports:
-      - "3000:3000"
+      - "5913:5913"
     volumes:
       - grafana_data:/var/lib/grafana
     networks:
@@ -75,12 +75,12 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlops_user:mlops_password@postgres:5432/mlops_db
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlops_user:mlops_password@postgres:5911/mlops_db
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
     ports:
-      - "8080:8080"
+      - "6090:6090"
     volumes:
       - /home/da25m591/project/dags:/opt/airflow/dags
       - /var/run/docker.sock:/var/run/docker.sock
@@ -98,7 +98,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlops_user:mlops_password@postgres:5432/mlops_db
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlops_user:mlops_password@postgres:5911/mlops_db
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
     volumes:
@@ -118,8 +118,8 @@ services:
     ports:
       - "5910:5910"
     environment:
-      MLFLOW_TRACKING_URI: http://mlflow:5000
-      DATABASE_URL: postgresql://mlops_user:mlops_password@postgres:5432/mlops_db
+      MLFLOW_TRACKING_URI: http://mlflow:6091
+      DATABASE_URL: postgresql://mlops_user:mlops_password@postgres:5911/mlops_db
     volumes:
       - /home/da25m591/project/src/api:/app/api
     command: uvicorn api.main:app --host 0.0.0.0 --port 5910 --reload
