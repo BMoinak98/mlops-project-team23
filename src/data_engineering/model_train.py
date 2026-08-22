@@ -1,9 +1,10 @@
 import os
-
-# Configure PySpark submit args BEFORE importing PySpark
-os.environ["PYSPARK_SUBMIT_ARGS"] = "--driver-memory 6g pyspark-shell"
-
+import shutil
 from pathlib import Path
+
+# Match container submit args (4g heap) to prevent off-heap starvation
+os.environ["PYSPARK_SUBMIT_ARGS"] = "--driver-memory 4g pyspark-shell"
+
 from pyspark import StorageLevel
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, when
@@ -39,21 +40,29 @@ print(f"Train Data Path: {TRAIN_PATH}")
 print(f"Test Data Path: {TEST_PATH}")
 
 # ============================================================
-# 2. CREATE SPARK SESSION (Optimized for Local Mode)
+# 2. CREATE SPARK SESSION (Tuned for Docker Stability)
 # ============================================================
 spark = (
     SparkSession.builder
     .appName("TelcoCustomerChurn_train")
     .master("local[2]")
-    .config("spark.driver.memory", "6g")
-    .config("spark.driver.maxResultSize", "2g")
+    .config("spark.driver.memory", "4g")
+    .config("spark.driver.memoryOverhead", "1024m")
+    .config("spark.driver.maxResultSize", "1g")
+    .config("spark.network.timeout", "800s")
+    .config("spark.executor.heartbeatInterval", "60s")
+    .config("spark.python.worker.reuse", "true")
     .config("spark.driver.extraJavaOptions", "-XX:+UseG1GC")
     .config("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
-    .config("spark.hadoop.mapreduce.fileoutputcommitter.cleanup.skipped", "true")
     .getOrCreate()
 )
 
 spark.sparkContext.setLogLevel("WARN")
+
+# Set local directory for truncating iterative ML lineages
+CHECKPOINT_DIR = "/tmp/spark_checkpoints"
+os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+spark.sparkContext.setCheckpointDir(CHECKPOINT_DIR)
 
 train_df = spark.read.parquet(str(TRAIN_PATH))
 test_df = spark.read.parquet(str(TEST_PATH))
@@ -76,9 +85,9 @@ train_df = train_df.withColumn(
     when(col("label") == 1.0, positive_weight).otherwise(negative_weight)
 )
 
-# Persist DataFrames in memory/disk to truncate lineage safely
-train_df = train_df.persist(StorageLevel.MEMORY_AND_DISK)
-test_df = test_df.persist(StorageLevel.MEMORY_AND_DISK)
+# Use serialized persistence to reduce JVM heap overhead
+train_df = train_df.persist(StorageLevel.MEMORY_AND_DISK_SER)
+test_df = test_df.persist(StorageLevel.MEMORY_AND_DISK_SER)
 train_df.count()
 test_df.count()
 
@@ -126,7 +135,7 @@ scaler = StandardScaler(
 )
 
 # ============================================================
-# 5. MODEL PIPELINES
+# 5. MODEL PIPELINES (With Checkpointing)
 # ============================================================
 lr = LogisticRegression(
     featuresCol="features",
@@ -134,7 +143,8 @@ lr = LogisticRegression(
     weightCol="classWeight",
     maxIter=100,
     regParam=0.01,
-    elasticNetParam=0.0
+    elasticNetParam=0.0,
+    checkpointInterval=10
 )
 
 lr_pipeline = Pipeline(stages=[indexer, encoder, assembler, scaler, lr])
@@ -143,19 +153,19 @@ rf = RandomForestClassifier(
     featuresCol="unscaled_features",
     labelCol="label",
     weightCol="classWeight",
-    numTrees=200,
+    numTrees=100,
     maxDepth=8,
-    seed=42
+    seed=42,
+    checkpointInterval=10
 )
 
 rf_pipeline = Pipeline(stages=[indexer, encoder, assembler, rf])
 
 # ============================================================
-# 6. OPTIMIZED EVALUATION FUNCTION
+# 6. EVALUATION FUNCTION
 # ============================================================
 def evaluate_model(model, test_data):
-    # Persist predictions so the pipeline isn't re-evaluated 6 times
-    predictions = model.transform(test_data).persist(StorageLevel.MEMORY_AND_DISK)
+    predictions = model.transform(test_data).persist(StorageLevel.MEMORY_AND_DISK_SER)
     predictions.count()
 
     auc_evaluator = BinaryClassificationEvaluator(labelCol="label", rawPredictionCol="rawPrediction", metricName="areaUnderROC")
@@ -219,7 +229,7 @@ with mlflow.start_run(run_name="RandomForest"):
     metrics_rf = evaluate_model(model_rf, test_df)
 
     mlflow.log_param("model", "RandomForest")
-    mlflow.log_param("numTrees", 200)
+    mlflow.log_param("numTrees", 100)
     mlflow.log_param("maxDepth", 8)
     mlflow.log_metrics(metrics_rf)
 
@@ -232,7 +242,7 @@ with mlflow.start_run(run_name="RandomForest"):
     print("Random Forest:", metrics_rf)
 
 # ============================================================
-# 10. MODEL COMPARISON
+# 10. MODEL COMPARISON & CLEANUP
 # ============================================================
 print("\n==============================")
 print("MODEL COMPARISON")
@@ -246,4 +256,7 @@ print("\nRandom Forest")
 for metric, value in metrics_rf.items():
     print(f"{metric}: {value:.4f}")
 
+train_df.unpersist()
+test_df.unpersist()
 spark.stop()
+shutil.rmtree(CHECKPOINT_DIR, ignore_errors=True)
