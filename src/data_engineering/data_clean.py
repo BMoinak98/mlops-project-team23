@@ -32,11 +32,10 @@ print(f"Test Data Output: {TEST_PATH}")
 spark = (
     SparkSession.builder
     .appName("TelcoCustomerChurn_data_clean")
-    .master("local[*]")
-    .config("spark.driver.memory", "16g")        # Expand JVM heap from 1GB to 16GB
-    .config("spark.executor.memory", "16g")      # Expand executor heap
-    .config("spark.driver.maxResultSize", "4g")
-    .config("spark.sql.execution.arrow.pyspark.enabled", "true")
+    .master("local[2]")                      # Limit to 2 CPU threads (leaves remaining cores for Airflow)
+    .config("spark.driver.memory", "2g")      # Capped to 2GB to prevent JVM freeze
+    .config("spark.executor.memory", "2g")
+    .config("spark.sql.shuffle.partitions", "4") # Low partition count for small tabular data
     .getOrCreate()
 )
 spark.sparkContext.setLogLevel("WARN")
