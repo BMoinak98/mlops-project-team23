@@ -221,15 +221,14 @@ df = df.localCheckpoint()
 # 9. CHECK CLASS DISTRIBUTION
 # ============================================================
 
+total_records = df.count()
+print(f"Total processed records: {total_records}")
 print("Class distribution:")
 
 (
     df.groupBy("label")
       .count()
-      .withColumn(
-          "percentage",
-          col("count") / df.count() * 100
-      )
+      .withColumn("percentage", (col("count") / total_records) * 100)
       .show()
 )
 
