@@ -3,9 +3,7 @@ os.environ["PYSPARK_SUBMIT_ARGS"] = "--driver-memory 4g pyspark-shell"
 
 from pathlib import Path
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import (
-    col, when, trim, count, sum as spark_sum
-)
+from pyspark.sql.functions import col, when
 from pyspark.ml import Pipeline
 from pyspark.ml.feature import (
     StringIndexer,
@@ -37,35 +35,8 @@ TEST_PATH = config["test_data_path"]
 print(f"Train Data Path: {TRAIN_PATH}")
 print(f"Test Data Path: {TEST_PATH}")
 
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import (
-    col, when, trim, count, sum as spark_sum
-)
-
-from pyspark.ml import Pipeline
-from pyspark.ml.feature import (
-    StringIndexer,
-    OneHotEncoder,
-    VectorAssembler,
-    StandardScaler
-)
-
-from pyspark.ml.classification import (
-    LogisticRegression,
-    RandomForestClassifier
-)
-
-from pyspark.ml.evaluation import (
-    BinaryClassificationEvaluator,
-    MulticlassClassificationEvaluator
-)
-
-import mlflow
-import mlflow.spark
-
-
 # ============================================================
-# 1. CREATE SPARK SESSION
+# 2. CREATE SPARK SESSION
 # ============================================================
 
 spark = (
@@ -88,11 +59,8 @@ train_df = spark.read.parquet(str(TRAIN_PATH))
 test_df = spark.read.parquet(str(TEST_PATH))
 
 # ============================================================
-# 2. HANDLE CLASS IMBALANCE
+# 3. HANDLE CLASS IMBALANCE
 # ============================================================
-
-# Calculate class frequencies from TRAINING DATA ONLY
-
 class_counts = (
     train_df.groupBy("label")
     .count()
@@ -104,8 +72,8 @@ counts = {
     for row in class_counts
 }
 
-negative_count = counts.get(0.0)
-positive_count = counts.get(1.0)
+negative_count = counts.get(0.0, 1)
+positive_count = counts.get(1.0, 1)
 
 total_count = negative_count + positive_count
 
@@ -129,6 +97,10 @@ train_df = train_df.withColumn(
     )
 )
 
+# Materialize dataframes in memory & truncate lineage before ML pipeline execution
+train_df = train_df.localCheckpoint(eager=True)
+test_df = test_df.localCheckpoint(eager=True)
+
 categorical_columns = [
     "gender",
     "Partner",
@@ -148,7 +120,7 @@ categorical_columns = [
 ]
 
 # ============================================================
-# 3. DEFINE FEATURES
+# 4. DEFINE FEATURES & PIPELINE STAGES
 # ============================================================
 
 categorical_features = categorical_columns + [
@@ -164,41 +136,20 @@ numeric_features = [
     "avg_monthly_spend"
 ]
 
+indexed_columns = [c + "_index" for c in categorical_features]
+encoded_columns = [c + "_encoded" for c in categorical_features]
 
-# Convert categorical values to indexes
-indexers = [
-    StringIndexer(
-        inputCol=c,
-        outputCol=c + "_index",
-        handleInvalid="keep"
-    )
-    for c in categorical_features
-]
-
-
-indexed_columns = [
-    c + "_index"
-    for c in categorical_features
-]
-
-
-# One-hot encode categorical variables
-encoder = OneHotEncoder(
-    inputCols=indexed_columns,
-    outputCols=[
-        c + "_encoded"
-        for c in categorical_features
-    ]
+indexer = StringIndexer(
+    inputCols=categorical_features,
+    outputCols=indexed_columns,
+    handleInvalid="keep"
 )
 
+encoder = OneHotEncoder(
+    inputCols=indexed_columns,
+    outputCols=encoded_columns
+)
 
-encoded_columns = [
-    c + "_encoded"
-    for c in categorical_features
-]
-
-
-# Assemble all features
 assembler = VectorAssembler(
     inputCols=numeric_features + encoded_columns,
     outputCol="unscaled_features",
@@ -216,7 +167,7 @@ scaler = StandardScaler(
 
 
 # ============================================================
-# 4. MODEL 1 - LOGISTIC REGRESSION
+# 5. MODEL PIPELINES
 # ============================================================
 
 lr = LogisticRegression(
@@ -230,7 +181,8 @@ lr = LogisticRegression(
 
 
 lr_pipeline = Pipeline(
-    stages=indexers + [
+    stages=[
+        indexer,
         encoder,
         assembler,
         scaler,
@@ -254,7 +206,8 @@ rf = RandomForestClassifier(
 
 
 rf_pipeline = Pipeline(
-    stages=indexers + [
+    stages=[
+        indexer,
         encoder,
         assembler,
         rf
@@ -439,7 +392,6 @@ with mlflow.start_run(
 # ============================================================
 # 10. MODEL COMPARISON
 # ============================================================
-
 print("\n==============================")
 print("MODEL COMPARISON")
 print("==============================")
