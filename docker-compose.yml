@@ -20,7 +20,7 @@ services:
       POSTGRES_PASSWORD: mlops_password
       POSTGRES_DB: mlops_db
     ports:
-      - "5911:5911"
+      - "5911:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -80,7 +80,7 @@ services:
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
     ports:
-      - "6090:6090"
+      - "6090:8080"
     volumes:
       - /home/da25m591/project/dags:/opt/airflow/dags
       - /var/run/docker.sock:/var/run/docker.sock
