@@ -28,10 +28,14 @@ with DAG(
         'auto_remove': 'success',
         'docker_url': 'unix://var/run/docker.sock',
         'network_mode': 'mlops-net',
+        'working_dir': '/app/src/data_engineering',
+        'environment': {
+            'PYTHONPATH': '/app/src/data_engineering',
+        },
         'mounts': [
             Mount(source='/home/da25m591/data', target='/data', type='bind'),
             Mount(source='/home/da25m591/project/src/data_engineering', target='/app/src/data_engineering', type='bind'),
-            Mount(source='/home/da25m591/project/config/config-docker.yml', target='/app/config/config-docker.yml', type='bind'),
+            Mount(source='/home/da25m591/project/config', target='/app/config', type='bind'),
         ],
     }
 

@@ -80,6 +80,8 @@ jobs:
             mkdir -p /home/da25m591/project/src/data_engineering
             mkdir -p /home/da25m591/project/src/api
             mkdir -p /home/da25m591/project/config
+            mkdir -p /home/da25m591/project/logs
+            chmod -R 777 /home/da25m591/project/logs
       - name: Push docker-compose.yml to server
         uses: appleboy/scp-action@v0.1.7
         with:

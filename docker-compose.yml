@@ -41,6 +41,7 @@ services:
     environment:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlops_user:mlops_password@postgres:5432/mlops_db
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
+      AIRFLOW__WEBSERVER__SECRET_KEY: airflow_secret
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
     networks:
       - mlops-net
@@ -99,11 +100,13 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlops_user:mlops_password@postgres:5432/mlops_db
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
+      AIRFLOW__WEBSERVER__SECRET_KEY: airflow_secret
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
     ports:
       - "6090:8080" # Host: 6090 -> Container: 8080
     volumes:
       - /home/da25m591/project/dags:/opt/airflow/dags
+      - /home/da25m591/project/logs:/opt/airflow/logs
       - /var/run/docker.sock:/var/run/docker.sock
       - /home/da25m591/data:/opt/data
       - /home/da25m591/project/src:/app/src
@@ -124,8 +127,10 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlops_user:mlops_password@postgres:5432/mlops_db
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
+      AIRFLOW__WEBSERVER__SECRET_KEY: airflow_secret
     volumes:
       - /home/da25m591/project/dags:/opt/airflow/dags
+      - /home/da25m591/project/logs:/opt/airflow/logs
       - /var/run/docker.sock:/var/run/docker.sock
       - /home/da25m591/data:/opt/data
       - /home/da25m591/project/src:/app/src
