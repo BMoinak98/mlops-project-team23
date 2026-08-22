@@ -75,7 +75,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlops_user:mlops_password@postgres:5911/mlops_db
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlops_user:mlops_password@postgres:5432/mlops_db
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
@@ -98,7 +98,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlops_user:mlops_password@postgres:5911/mlops_db
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlops_user:mlops_password@postgres:5432/mlops_db
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
     volumes:
@@ -119,7 +119,7 @@ services:
       - "5910:5910"
     environment:
       MLFLOW_TRACKING_URI: http://mlflow:6091
-      DATABASE_URL: postgresql://mlops_user:mlops_password@postgres:5911/mlops_db
+      DATABASE_URL: postgresql://mlops_user:mlops_password@postgres:5432/mlops_db
     volumes:
       - /home/da25m591/project/src/api:/app/api
     command: uvicorn api.main:app --host 0.0.0.0 --port 5910 --reload

@@ -244,7 +244,7 @@ jobs:
       - name: Push ML scripts to server
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.SSH_HOST }}
+          host: ${{ secrets.SSlsH_HOST }}
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "src/data_engineering/,src/training/"
