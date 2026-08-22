@@ -111,24 +111,22 @@ categorical_columns = [
     "PaymentMethod"
 ]
 
+# 1. Truncate query plan lineage before statistical calculations
+df = df.localCheckpoint()
 
-# Numeric missing values -> median
-for c in numeric_columns:
+# 2. Calculate medians for ALL numeric columns in ONE single Spark job
+quantiles = df.approxQuantile(numeric_columns, [0.5], 0.01)
 
-    median_value = df.approxQuantile(
-        c,
-        [0.5],
-        0.01
-    )[0]
-
-    df = df.fillna(
-        {c: median_value}
-    )
+numeric_medians = {
+    col_name: quantiles[i][0] 
+    for i, col_name in enumerate(numeric_columns)
+}
 
 
 # Categorical missing values -> "Unknown"
 cat_defaults = {c: "Unknown" for c in categorical_columns}
 df = df.fillna(cat_defaults)
+df = df.fillna(numeric_medians)
 
 
 # ============================================================
