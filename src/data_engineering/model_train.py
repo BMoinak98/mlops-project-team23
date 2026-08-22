@@ -68,10 +68,11 @@ import mlflow.spark
 spark = (
     SparkSession.builder
     .appName("TelcoCustomerChurn_train")
-    .master("local[2]")                      # Limit to 2 CPU threads (leaves remaining cores for Airflow)
-    .config("spark.driver.memory", "2g")      # Capped to 2GB to prevent JVM freeze
+    .config("spark.driver.memory", "2g")
     .config("spark.executor.memory", "2g")
-    .config("spark.sql.shuffle.partitions", "4") # Low partition count for small tabular data
+    .config("spark.driver.extraJavaOptions", "-XX:MaxDirectMemorySize=1g")
+    .config("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
+    .config("spark.hadoop.mapreduce.fileoutputcommitter.cleanup.skipped", "true")
     .getOrCreate()
 )
 
