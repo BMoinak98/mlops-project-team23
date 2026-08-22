@@ -225,6 +225,7 @@ jobs:
     if: inputs.deploy_code_dag == true
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Push DAG files to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -239,6 +240,7 @@ jobs:
     if: inputs.deploy_code_ml == true
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Push ML scripts to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -253,6 +255,7 @@ jobs:
     if: inputs.deploy_code_api == true
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Push API code to server
         uses: appleboy/scp-action@v0.1.7
         with:
