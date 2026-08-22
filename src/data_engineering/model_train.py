@@ -1,7 +1,10 @@
 import os
-os.environ["PYSPARK_SUBMIT_ARGS"] = "--driver-memory 4g --executor-memory 2g pyspark-shell"
+
+# Configure PySpark submit args BEFORE importing PySpark
+os.environ["PYSPARK_SUBMIT_ARGS"] = "--driver-memory 6g pyspark-shell"
 
 from pathlib import Path
+from pyspark import StorageLevel
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, when
 from pyspark.ml import Pipeline
@@ -36,16 +39,15 @@ print(f"Train Data Path: {TRAIN_PATH}")
 print(f"Test Data Path: {TEST_PATH}")
 
 # ============================================================
-# 2. CREATE SPARK SESSION
+# 2. CREATE SPARK SESSION (Optimized for Local Mode)
 # ============================================================
-
 spark = (
     SparkSession.builder
     .appName("TelcoCustomerChurn_train")
     .master("local[2]")
-    .config("spark.driver.memory", "4g")
-    .config("spark.executor.memory", "2g")
-    .config("spark.driver.extraJavaOptions", "-XX:MaxDirectMemorySize=1g")
+    .config("spark.driver.memory", "6g")
+    .config("spark.driver.maxResultSize", "2g")
+    .config("spark.driver.extraJavaOptions", "-XX:+UseG1GC")
     .config("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
     .config("spark.hadoop.mapreduce.fileoutputcommitter.cleanup.skipped", "true")
     .getOrCreate()
@@ -53,87 +55,47 @@ spark = (
 
 spark.sparkContext.setLogLevel("WARN")
 
-
-
 train_df = spark.read.parquet(str(TRAIN_PATH))
 test_df = spark.read.parquet(str(TEST_PATH))
 
 # ============================================================
 # 3. HANDLE CLASS IMBALANCE
 # ============================================================
-class_counts = (
-    train_df.groupBy("label")
-    .count()
-    .collect()
-)
-
-counts = {
-    row["label"]: row["count"]
-    for row in class_counts
-}
+class_counts = train_df.groupBy("label").count().collect()
+counts = {row["label"]: row["count"] for row in class_counts}
 
 negative_count = counts.get(0.0, 1)
 positive_count = counts.get(1.0, 1)
-
 total_count = negative_count + positive_count
 
-
-negative_weight = total_count / (
-    2.0 * negative_count
-)
-
-positive_weight = total_count / (
-    2.0 * positive_count
-)
-
+negative_weight = total_count / (2.0 * negative_count)
+positive_weight = total_count / (2.0 * positive_count)
 
 train_df = train_df.withColumn(
     "classWeight",
-    when(
-        col("label") == 1.0,
-        positive_weight
-    ).otherwise(
-        negative_weight
-    )
+    when(col("label") == 1.0, positive_weight).otherwise(negative_weight)
 )
 
-# Materialize dataframes in memory & truncate lineage before ML pipeline execution
-train_df = train_df.localCheckpoint(eager=True)
-test_df = test_df.localCheckpoint(eager=True)
-
-categorical_columns = [
-    "gender",
-    "Partner",
-    "Dependents",
-    "PhoneService",
-    "MultipleLines",
-    "InternetService",
-    "OnlineSecurity",
-    "OnlineBackup",
-    "DeviceProtection",
-    "TechSupport",
-    "StreamingTV",
-    "StreamingMovies",
-    "Contract",
-    "PaperlessBilling",
-    "PaymentMethod"
-]
+# Persist DataFrames in memory/disk to truncate lineage safely
+train_df = train_df.persist(StorageLevel.MEMORY_AND_DISK)
+test_df = test_df.persist(StorageLevel.MEMORY_AND_DISK)
+train_df.count()
+test_df.count()
 
 # ============================================================
 # 4. DEFINE FEATURES & PIPELINE STAGES
 # ============================================================
-
-categorical_features = categorical_columns + [
-    "tenure_group"
+categorical_columns = [
+    "gender", "Partner", "Dependents", "PhoneService", "MultipleLines",
+    "InternetService", "OnlineSecurity", "OnlineBackup", "DeviceProtection",
+    "TechSupport", "StreamingTV", "StreamingMovies", "Contract",
+    "PaperlessBilling", "PaymentMethod"
 ]
 
+categorical_features = categorical_columns + ["tenure_group"]
 numeric_features = [
-    "SeniorCitizen",
-    "tenure",
-    "MonthlyCharges",
-    "TotalCharges",
-    "service_count",
-    "avg_monthly_spend"
+    "SeniorCitizen", "tenure", "MonthlyCharges",
+    "TotalCharges", "service_count", "avg_monthly_spend"
 ]
 
 indexed_columns = [c + "_index" for c in categorical_features]
@@ -156,8 +118,6 @@ assembler = VectorAssembler(
     handleInvalid="keep"
 )
 
-
-# Standardization
 scaler = StandardScaler(
     inputCol="unscaled_features",
     outputCol="features",
@@ -165,11 +125,9 @@ scaler = StandardScaler(
     withStd=True
 )
 
-
 # ============================================================
 # 5. MODEL PIPELINES
 # ============================================================
-
 lr = LogisticRegression(
     featuresCol="features",
     labelCol="label",
@@ -179,21 +137,7 @@ lr = LogisticRegression(
     elasticNetParam=0.0
 )
 
-
-lr_pipeline = Pipeline(
-    stages=[
-        indexer,
-        encoder,
-        assembler,
-        scaler,
-        lr
-    ]
-)
-
-
-# ============================================================
-# 5. MODEL 2 - RANDOM FOREST
-# ============================================================
+lr_pipeline = Pipeline(stages=[indexer, encoder, assembler, scaler, lr])
 
 rf = RandomForestClassifier(
     featuresCol="unscaled_features",
@@ -204,190 +148,88 @@ rf = RandomForestClassifier(
     seed=42
 )
 
-
-rf_pipeline = Pipeline(
-    stages=[
-        indexer,
-        encoder,
-        assembler,
-        rf
-    ]
-)
-
+rf_pipeline = Pipeline(stages=[indexer, encoder, assembler, rf])
 
 # ============================================================
-# 6. EVALUATION FUNCTION
+# 6. OPTIMIZED EVALUATION FUNCTION
 # ============================================================
-
 def evaluate_model(model, test_data):
+    # Persist predictions so the pipeline isn't re-evaluated 6 times
+    predictions = model.transform(test_data).persist(StorageLevel.MEMORY_AND_DISK)
+    predictions.count()
 
-    predictions = model.transform(test_data)
+    auc_evaluator = BinaryClassificationEvaluator(labelCol="label", rawPredictionCol="rawPrediction", metricName="areaUnderROC")
+    pr_evaluator = BinaryClassificationEvaluator(labelCol="label", rawPredictionCol="rawPrediction", metricName="areaUnderPR")
+    accuracy_evaluator = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction", metricName="accuracy")
+    f1_evaluator = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction", metricName="f1")
+    precision_evaluator = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction", metricName="weightedPrecision")
+    recall_evaluator = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction", metricName="weightedRecall")
 
-    # ROC-AUC
-    auc_evaluator = BinaryClassificationEvaluator(
-        labelCol="label",
-        rawPredictionCol="rawPrediction",
-        metricName="areaUnderROC"
-    )
-
-    auc = auc_evaluator.evaluate(predictions)
-
-
-    # PR-AUC
-    pr_evaluator = BinaryClassificationEvaluator(
-        labelCol="label",
-        rawPredictionCol="rawPrediction",
-        metricName="areaUnderPR"
-    )
-
-    pr_auc = pr_evaluator.evaluate(predictions)
-
-
-    # Accuracy
-    accuracy_evaluator = MulticlassClassificationEvaluator(
-        labelCol="label",
-        predictionCol="prediction",
-        metricName="accuracy"
-    )
-
-    accuracy = accuracy_evaluator.evaluate(predictions)
-
-
-    # F1
-    f1_evaluator = MulticlassClassificationEvaluator(
-        labelCol="label",
-        predictionCol="prediction",
-        metricName="f1"
-    )
-
-    f1 = f1_evaluator.evaluate(predictions)
-
-
-    # Precision
-    precision_evaluator = MulticlassClassificationEvaluator(
-        labelCol="label",
-        predictionCol="prediction",
-        metricName="weightedPrecision"
-    )
-
-    precision = precision_evaluator.evaluate(predictions)
-
-
-    # Recall
-    recall_evaluator = MulticlassClassificationEvaluator(
-        labelCol="label",
-        predictionCol="prediction",
-        metricName="weightedRecall"
-    )
-
-    recall = recall_evaluator.evaluate(predictions)
-
-
-    return {
-        "accuracy": accuracy,
-        "precision": precision,
-        "recall": recall,
-        "f1": f1,
-        "roc_auc": auc,
-        "pr_auc": pr_auc
+    metrics = {
+        "accuracy": accuracy_evaluator.evaluate(predictions),
+        "precision": precision_evaluator.evaluate(predictions),
+        "recall": recall_evaluator.evaluate(predictions),
+        "f1": f1_evaluator.evaluate(predictions),
+        "roc_auc": auc_evaluator.evaluate(predictions),
+        "pr_auc": pr_evaluator.evaluate(predictions)
     }
+
+    predictions.unpersist()
+    return metrics
+
 # ============================================================
-# MLFLOW TRACKING CONFIGURATION
+# 7. MLFLOW TRACKING CONFIGURATION
 # ============================================================
 mlflow_cfg = config.get("mlflow", {})
 mlflow_uri = mlflow_cfg.get("tracking_uri", "http://mlflow:6091")
 mlflow.set_tracking_uri(mlflow_uri)
+mlflow.set_registry_uri(mlflow_uri)
 print("MLflow tracking URI:", mlflow.get_tracking_uri())
 
 exp_name = mlflow_cfg.get("experiment_name", "Telco Customer Churn - Spark ML")
 mlflow.set_experiment(exp_name)
 
+os.makedirs("/tmp/mlflow_tmp", exist_ok=True)
 
 # ============================================================
 # 8. TRAIN LOGISTIC REGRESSION
 # ============================================================
-
-with mlflow.start_run(
-    run_name="LogisticRegression"
-):
-
+with mlflow.start_run(run_name="LogisticRegression"):
     model_lr = lr_pipeline.fit(train_df)
+    metrics_lr = evaluate_model(model_lr, test_df)
 
-    metrics_lr = evaluate_model(
-        model_lr,
-        test_df
-    )
-
-    mlflow.log_param(
-        "model",
-        "LogisticRegression"
-    )
-
-    mlflow.log_param(
-        "maxIter",
-        100
-    )
-
-    mlflow.log_param(
-        "regParam",
-        0.01
-    )
-
+    mlflow.log_param("model", "LogisticRegression")
+    mlflow.log_param("maxIter", 100)
+    mlflow.log_param("regParam", 0.01)
     mlflow.log_metrics(metrics_lr)
 
     mlflow.spark.log_model(
-        model_lr,
-        "logistic-regression-model"
+        spark_model=model_lr,
+        artifact_path="logistic-regression-model",
+        dfs_tmpdir="/tmp/mlflow_tmp"
     )
 
-    print(
-        "Logistic Regression:",
-        metrics_lr
-    )
-
+    print("Logistic Regression:", metrics_lr)
 
 # ============================================================
 # 9. TRAIN RANDOM FOREST
 # ============================================================
-
-with mlflow.start_run(
-    run_name="RandomForest"
-):
-
+with mlflow.start_run(run_name="RandomForest"):
     model_rf = rf_pipeline.fit(train_df)
+    metrics_rf = evaluate_model(model_rf, test_df)
 
-    metrics_rf = evaluate_model(
-        model_rf,
-        test_df
-    )
-
-    mlflow.log_param(
-        "model",
-        "RandomForest"
-    )
-
-    mlflow.log_param(
-        "numTrees",
-        200
-    )
-
-    mlflow.log_param(
-        "maxDepth",
-        8
-    )
-
+    mlflow.log_param("model", "RandomForest")
+    mlflow.log_param("numTrees", 200)
+    mlflow.log_param("maxDepth", 8)
     mlflow.log_metrics(metrics_rf)
 
     mlflow.spark.log_model(
-        model_rf,
-        "random-forest-model"
+        spark_model=model_rf,
+        artifact_path="random-forest-model",
+        dfs_tmpdir="/tmp/mlflow_tmp"
     )
 
-    print(
-        "Random Forest:",
-        metrics_rf
-    )
-
+    print("Random Forest:", metrics_rf)
 
 # ============================================================
 # 10. MODEL COMPARISON
@@ -400,10 +242,8 @@ print("\nLogistic Regression")
 for metric, value in metrics_lr.items():
     print(f"{metric}: {value:.4f}")
 
-
 print("\nRandom Forest")
 for metric, value in metrics_rf.items():
     print(f"{metric}: {value:.4f}")
-
 
 spark.stop()

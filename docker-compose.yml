@@ -133,8 +133,8 @@ services:
     image: ghcr.io/bmoinak98/mlops-project-team23/airflow:latest
     container_name: airflow-scheduler
     restart: always
-    mem_limit: 8g
-    mem_reservation: 4g
+    mem_limit: 12g
+    mem_reservation: 6g
     depends_on:
       postgres:
         condition: service_healthy
