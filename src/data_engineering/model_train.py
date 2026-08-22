@@ -2,7 +2,6 @@ import os
 import shutil
 from pathlib import Path
 
-# Match container submit args (4g heap) to prevent off-heap starvation
 os.environ["PYSPARK_SUBMIT_ARGS"] = "--driver-memory 4g pyspark-shell"
 
 from pyspark import StorageLevel
@@ -40,7 +39,7 @@ print(f"Train Data Path: {TRAIN_PATH}")
 print(f"Test Data Path: {TEST_PATH}")
 
 # ============================================================
-# 2. CREATE SPARK SESSION (Tuned for Docker Stability)
+# 2. CREATE SPARK SESSION
 # ============================================================
 spark = (
     SparkSession.builder
@@ -59,7 +58,7 @@ spark = (
 
 spark.sparkContext.setLogLevel("WARN")
 
-# Set local directory for truncating iterative ML lineages
+# Directory for truncating iterative ML execution lineages
 CHECKPOINT_DIR = "/tmp/spark_checkpoints"
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 spark.sparkContext.setCheckpointDir(CHECKPOINT_DIR)
@@ -85,7 +84,6 @@ train_df = train_df.withColumn(
     when(col("label") == 1.0, positive_weight).otherwise(negative_weight)
 )
 
-# Use serialized persistence to reduce JVM heap overhead
 train_df = train_df.persist(StorageLevel.MEMORY_AND_DISK)
 test_df = test_df.persist(StorageLevel.MEMORY_AND_DISK)
 train_df.count()
@@ -135,7 +133,7 @@ scaler = StandardScaler(
 )
 
 # ============================================================
-# 5. MODEL PIPELINES (With Checkpointing)
+# 5. MODEL PIPELINES
 # ============================================================
 lr = LogisticRegression(
     featuresCol="features",
@@ -143,8 +141,7 @@ lr = LogisticRegression(
     weightCol="classWeight",
     maxIter=100,
     regParam=0.01,
-    elasticNetParam=0.0,
-    checkpointInterval=10
+    elasticNetParam=0.0
 )
 
 lr_pipeline = Pipeline(stages=[indexer, encoder, assembler, scaler, lr])
