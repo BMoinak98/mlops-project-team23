@@ -91,6 +91,7 @@ services:
     image: ghcr.io/bmoinak98/mlops-project-team23/airflow:latest
     container_name: airflow-webserver
     restart: always
+    user: root
     depends_on:
       postgres:
         condition: service_healthy
@@ -118,6 +119,7 @@ services:
     image: ghcr.io/bmoinak98/mlops-project-team23/airflow:latest
     container_name: airflow-scheduler
     restart: always
+    user: root
     depends_on:
       postgres:
         condition: service_healthy

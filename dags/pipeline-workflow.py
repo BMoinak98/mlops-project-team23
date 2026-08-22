@@ -26,7 +26,7 @@ with DAG(
     docker_operator_kwargs = {
         'image': 'ghcr.io/bmoinak98/mlops-project-team23/ml-runner:latest',
         'auto_remove': 'success',
-        'docker_url': 'unix://var/run/docker.sock',
+        'docker_url': 'unix:///var/run/docker.sock',
         'network_mode': 'mlops-net',
         'working_dir': '/app/src/data_engineering',
         'environment': {
