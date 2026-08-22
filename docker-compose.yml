@@ -133,6 +133,8 @@ services:
     image: ghcr.io/bmoinak98/mlops-project-team23/airflow:latest
     container_name: airflow-scheduler
     restart: always
+    mem_limit: 8g
+    mem_reservation: 4g
     depends_on:
       postgres:
         condition: service_healthy
@@ -145,18 +147,14 @@ services:
       AIRFLOW__WEBSERVER__SECRET_KEY: airflow_secret
       MLFLOW_TRACKING_URI: http://mlflow:6091
       PYTHONPATH: /app/src/data_engineering
+      SPARK_DRIVER_MEMORY: "4g"
+      PYSPARK_SUBMIT_ARGS: "--driver-memory 4g pyspark-shell"
     volumes:
       - /home/da25m591/project/dags:/opt/airflow/dags
-      - /home/da25m591/project/logs:/opt/airflow/logs # Centralized log storage
+      - /home/da25m591/project/logs:/opt/airflow/logs
       - /home/da25m591/data:/opt/data
       - /home/da25m591/project/src:/app/src
       - /home/da25m591/project/config:/app/config
-    deploy:
-      resources:
-        limits:
-          memory: 8g
-        reservations:
-          memory: 4g
     networks:
       - mlops-net
     command: scheduler

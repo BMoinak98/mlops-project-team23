@@ -1,5 +1,5 @@
 import os
-os.environ["PYSPARK_SUBMIT_ARGS"] = "--driver-memory 4g pyspark-shell"
+os.environ["PYSPARK_SUBMIT_ARGS"] = "--driver-memory 4g --executor-memory 2g pyspark-shell"
 
 from pathlib import Path
 from pyspark.sql import SparkSession
