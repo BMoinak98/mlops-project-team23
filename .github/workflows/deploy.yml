@@ -172,6 +172,8 @@ jobs:
             docker compose pull airflow-init
             AIRFLOW__CORE__FERNET_KEY="${{ secrets.FERNET_KEY }}" docker compose up airflow-init
             AIRFLOW__CORE__FERNET_KEY="${{ secrets.FERNET_KEY }}" docker compose up -d --no-deps airflow-webserver airflow-scheduler
+            docker exec -u 0 airflow-scheduler mkdir -p /mlflow
+            docker exec -u 0 airflow-scheduler chmod -R 777 /mlflow
 
   deploy_infra_api:
     if: inputs.deploy_infra_api == true

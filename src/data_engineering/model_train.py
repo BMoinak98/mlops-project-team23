@@ -193,7 +193,7 @@ mlflow.set_tracking_uri(mlflow_uri)
 mlflow.set_registry_uri(mlflow_uri)
 print("MLflow tracking URI:", mlflow.get_tracking_uri())
 
-exp_name = mlflow_cfg.get("experiment_name", "Telco Customer Churn - Spark ML")
+exp_name = mlflow_cfg.get("experiment_name", "Telco Customer Churn - Spark ML v2")
 mlflow.set_experiment(exp_name)
 
 os.makedirs("/tmp/mlflow_tmp", exist_ok=True)
