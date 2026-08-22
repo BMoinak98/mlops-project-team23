@@ -1,0 +1,12 @@
+# ============================================================
+# Docker Execution Configuration
+# ============================================================
+data_dir: "/data"
+raw_data_path: "/data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv"
+train_data_path: "/data/processed/train"
+test_data_path: "/data/processed/test"
+
+mlflow:
+  tracking_uri: "http://mlflow:6091"
+  experiment_name: "Telco Customer Churn - Spark ML"
+  finetune_experiment_name: "Telco Customer Churn - Spark Ray Tune"

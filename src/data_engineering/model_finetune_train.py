@@ -52,95 +52,27 @@ from pyspark.ml.evaluation import (
 )
 
 
-# ============================================================
-# 1. WINDOWS HADOOP CONFIGURATION
-# ============================================================
-
-if platform.system() == "Windows":
-
-    HADOOP_HOME = r"C:\hadoop"
-
-    os.environ["HADOOP_HOME"] = HADOOP_HOME
-    os.environ["hadoop.home.dir"] = HADOOP_HOME
-
-    os.environ["PATH"] += (
-        os.pathsep
-        + os.path.join(HADOOP_HOME, "bin")
-    )
-
-    print("HADOOP_HOME:", os.environ.get("HADOOP_HOME"))
-
-    print(
-        "winutils exists:",
-        os.path.exists(
-            os.path.join(
-                HADOOP_HOME,
-                "bin",
-                "winutils.exe"
-            )
-        )
-    )
-
+from common_util import load_config
 
 # ============================================================
-# 2. DATA PATH CONFIGURATION
+# 1. LOAD CONFIG & PATHS
 # ============================================================
 
-LINUX_PATH = "/storage/data/datasets/team23_dataset/"
+config = load_config()
 
-FILE_NAME = (
-    "WA_Fn-UseC_-Telco-Customer-Churn.csv"
-)
+# Hadoop setup (if specified in config)
+hadoop_home = config.get("hadoop_home")
+if hadoop_home:
+    os.environ["HADOOP_HOME"] = hadoop_home
+    os.environ["hadoop.home.dir"] = hadoop_home
+    os.environ["PATH"] += os.pathsep + os.path.join(hadoop_home, "bin")
+    print("HADOOP_HOME configured:", hadoop_home)
 
+TRAIN_PATH = config["train_data_path"]
+TEST_PATH = config["test_data_path"]
 
-if platform.system() == "Windows":
-
-    PROJECT_ROOT = (
-        Path(__file__).resolve().parent.parent
-    )
-
-    DATA_PATH = (
-        PROJECT_ROOT
-        / "data"
-        / FILE_NAME
-    )
-
-
-elif platform.system() == "Linux":
-
-    DATA_PATH = (
-        Path(LINUX_PATH)
-        / FILE_NAME
-    )
-
-
-else:
-
-    raise RuntimeError(
-        f"Unsupported operating system: "
-        f"{platform.system()}"
-    )
-
-
-OUTPUT_DIR = (
-    DATA_PATH.parent
-    / "processed"
-)
-
-TRAIN_PATH = (
-    OUTPUT_DIR
-    / "train"
-)
-
-TEST_PATH = (
-    OUTPUT_DIR
-    / "test"
-)
-
-
-print(f"Data Path is {DATA_PATH}")
-print(f"Train Data Path is {TRAIN_PATH}")
-print(f"Test Data Path is {TEST_PATH}")
+print(f"Train Data Path: {TRAIN_PATH}")
+print(f"Test Data Path: {TEST_PATH}")
 
 
 # ============================================================
@@ -915,9 +847,13 @@ def evaluate_model(
 # 12. MLFLOW CONFIGURATION
 # ============================================================
 
-mlflow.set_experiment(
-    "Telco Customer Churn - Spark Ray Tune"
-)
+mlflow_cfg = config.get("mlflow", {})
+mlflow_uri = mlflow_cfg.get("tracking_uri", "http://mlflow:6091")
+mlflow.set_tracking_uri(mlflow_uri)
+print("MLflow tracking URI:", mlflow.get_tracking_uri())
+
+exp_name = mlflow_cfg.get("finetune_experiment_name", "Telco Customer Churn - Spark Ray Tune")
+mlflow.set_experiment(exp_name)
 
 
 # ============================================================

@@ -1,55 +1,38 @@
-# ============================================================
-# TELCO CUSTOMER CHURN - APACHE SPARK + MLFLOW
-# ============================================================
-import os
-import platform
 from pathlib import Path
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import (
+    col, when, trim, count, sum as spark_sum
+)
+from pyspark.ml import Pipeline
+from pyspark.ml.feature import (
+    StringIndexer,
+    OneHotEncoder,
+    VectorAssembler,
+    StandardScaler
+)
+from pyspark.ml.classification import (
+    LogisticRegression,
+    RandomForestClassifier
+)
+from pyspark.ml.evaluation import (
+    BinaryClassificationEvaluator,
+    MulticlassClassificationEvaluator
+)
+import mlflow
+import mlflow.spark
 
-if platform.system() == "Windows":
-    HADOOP_HOME = r"C:\hadoop"
+from common_util import load_config
 
-    os.environ["HADOOP_HOME"] = HADOOP_HOME
-    os.environ["hadoop.home.dir"] = HADOOP_HOME
-    os.environ["PATH"] += os.pathsep + os.path.join(
-        HADOOP_HOME,
-        "bin"
-    )
+# ============================================================
+# 1. LOAD CONFIG & PATHS
+# ============================================================
+config = load_config()
 
-    print("HADOOP_HOME:", os.environ.get("HADOOP_HOME"))
-    print(
-        "winutils exists:",
-        os.path.exists(
-            os.path.join(
-                HADOOP_HOME,
-                "bin",
-                "winutils.exe"
-            )
-        )
-    )
+TRAIN_PATH = config["train_data_path"]
+TEST_PATH = config["test_data_path"]
 
-LINUX_PATH = "/storage/data/datasets/team23_dataset/"
-FILE_NAME = "WA_Fn-UseC_-Telco-Customer-Churn.csv"
-
-if platform.system() == "Windows":
-    PROJECT_ROOT = Path(__file__).resolve().parent.parent
-    DATA_PATH = PROJECT_ROOT / "data" / FILE_NAME
-
-elif platform.system() == "Linux":
-    DATA_PATH = Path(
-        LINUX_PATH
-    ) / FILE_NAME
-
-else:
-    raise RuntimeError(
-        f"Unsupported operating system: {platform.system()}"
-    )
-OUTPUT_DIR = DATA_PATH.parent / "processed"
-
-TRAIN_PATH = OUTPUT_DIR / "train"
-TEST_PATH = OUTPUT_DIR / "test"
-print(f"Data Path is {DATA_PATH}")
-print(f"Train Data Path is {TRAIN_PATH}")
-print(f"Test Data Path is {TEST_PATH}")
+print(f"Train Data Path: {TRAIN_PATH}")
+print(f"Test Data Path: {TEST_PATH}")
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
@@ -350,27 +333,13 @@ def evaluate_model(model, test_data):
 # ============================================================
 # MLFLOW TRACKING CONFIGURATION
 # ============================================================
+mlflow_cfg = config.get("mlflow", {})
+mlflow_uri = mlflow_cfg.get("tracking_uri", "http://mlflow:6091")
+mlflow.set_tracking_uri(mlflow_uri)
+print("MLflow tracking URI:", mlflow.get_tracking_uri())
 
-if platform.system() == "Windows":
-    MLFLOW_DB = PROJECT_ROOT / "mlflow.db"
-
-    mlflow.set_tracking_uri(
-        f"sqlite:///{MLFLOW_DB.as_posix()}"
-    )
-
-print("MLflow tracking URI:",  mlflow.get_tracking_uri())
-
-mlflow.set_experiment(
-    "Telco Customer Churn - Spark ML"
-)
-
-# ============================================================
-# 7. MLFLOW EXPERIMENT
-# ============================================================
-
-mlflow.set_experiment(
-    "Telco Customer Churn - Spark ML"
-)
+exp_name = mlflow_cfg.get("experiment_name", "Telco Customer Churn - Spark ML")
+mlflow.set_experiment(exp_name)
 
 
 # ============================================================

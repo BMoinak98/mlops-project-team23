@@ -78,7 +78,6 @@ jobs:
           script: |
             mkdir -p /home/da25m591/project/dags
             mkdir -p /home/da25m591/project/src/data_engineering
-            mkdir -p /home/da25m591/project/src/training
             mkdir -p /home/da25m591/project/src/api
             mkdir -p /home/da25m591/project/config
       - name: Push docker-compose.yml to server
@@ -87,9 +86,9 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "docker-compose.yml"
+          source: "docker-compose.yml,config/config-docker.yml"
           target: "/home/da25m591/project/"
-
+      
   # --- IMAGE BUILDS (parallel) ---
   build_airflow_image:
     if: github.event_name == 'push' || inputs.build_airflow_image == true
@@ -248,9 +247,9 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "src/data_engineering/,src/training/"
-          target: "/home/da25m591/project/src/"
-          strip_components: 1
+          source: "src/data_engineering/"
+          target: "/home/da25m591/project/src/data_engineering/"
+          strip_components: 2
 
   deploy_code_api:
     if: inputs.deploy_code_api == true

@@ -1,63 +1,32 @@
 # ============================================================
-# TELCO CUSTOMER CHURN - APACHE SPARK + MLFLOW
+# TELCO CUSTOMER CHURN - APACHE SPARK DATA CLEANING
 # ============================================================
-import os
-import platform
-
-if platform.system() == "Windows":
-    HADOOP_HOME = r"C:\hadoop"
-
-    os.environ["HADOOP_HOME"] = HADOOP_HOME
-    os.environ["hadoop.home.dir"] = HADOOP_HOME
-    os.environ["PATH"] += os.pathsep + os.path.join(
-        HADOOP_HOME,
-        "bin"
-    )
-
-    print("HADOOP_HOME:", os.environ.get("HADOOP_HOME"))
-    print(
-        "winutils exists:",
-        os.path.exists(
-            os.path.join(
-                HADOOP_HOME,
-                "bin",
-                "winutils.exe"
-            )
-        )
-    )
+from pathlib import Path
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
     col, when, trim, count, sum as spark_sum
 )
-
-from pyspark.ml import Pipeline
-from pyspark.ml.feature import (
-    StringIndexer,
-    OneHotEncoder,
-    VectorAssembler,
-    StandardScaler
-)
-
-from pyspark.ml.classification import (
-    LogisticRegression,
-    RandomForestClassifier
-)
-
-from pyspark.ml.evaluation import (
-    BinaryClassificationEvaluator,
-    MulticlassClassificationEvaluator
-)
-
 import mlflow
 import mlflow.spark
 
-from pathlib import Path
-import platform
-import yaml
-# ============================================================
-# 1. CREATE SPARK SESSION
-# ============================================================
+from common_util import load_config
 
+# ============================================================
+# 1. LOAD CONFIG & PATHS
+# ============================================================
+config = load_config()
+
+DATA_PATH = config["raw_data_path"]
+TRAIN_PATH = config["train_data_path"]
+TEST_PATH = config["test_data_path"]
+
+print(f"Raw Data Path: {DATA_PATH}")
+print(f"Train Data Output: {TRAIN_PATH}")
+print(f"Test Data Output: {TEST_PATH}")
+
+# ============================================================
+# 2. CREATE SPARK SESSION
+# ============================================================
 spark = (
     SparkSession.builder
     .appName("TelcoCustomerChurn_data_clean")
@@ -67,33 +36,9 @@ spark = (
 
 spark.sparkContext.setLogLevel("WARN")
 
-
 # ============================================================
-# 2. LOAD DATA
+# 3. LOAD DATA
 # ============================================================
-LINUX_PATH = "/storage/data/datasets/team23_dataset/"
-FILE_NAME = "WA_Fn-UseC_-Telco-Customer-Churn.csv"
-
-if platform.system() == "Windows":
-    PROJECT_ROOT = Path(__file__).resolve().parent.parent
-    DATA_PATH = PROJECT_ROOT / "data" / FILE_NAME
-
-elif platform.system() == "Linux":
-    DATA_PATH = Path(
-        LINUX_PATH
-    ) / FILE_NAME
-
-else:
-    raise RuntimeError(
-        f"Unsupported operating system: {platform.system()}"
-    )
-OUTPUT_DIR = DATA_PATH.parent / "processed"
-
-TRAIN_PATH = OUTPUT_DIR / "train"
-TEST_PATH = OUTPUT_DIR / "test"
-print(f"Data Path is {DATA_PATH}")
-print(f"Train Data Path is {TRAIN_PATH}")
-print(f"Test Data Path is {TEST_PATH}")
 
 df = (
     spark.read
