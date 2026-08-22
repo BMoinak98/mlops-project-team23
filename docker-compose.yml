@@ -20,7 +20,7 @@ services:
       POSTGRES_PASSWORD: mlops_password
       POSTGRES_DB: mlops_db
     ports:
-      - "5911:5432"
+      - "5911:5432" # Host: 5911 -> Container: 5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -30,6 +30,22 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # Automated DB migration and admin creation before Airflow starts
+  airflow-init:
+    image: ghcr.io/bmoinak98/mlops-project-team23/airflow:latest
+    container_name: airflow-init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlops_user:mlops_password@postgres:5432/mlops_db
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
+    networks:
+      - mlops-net
+    command: >
+      bash -c "airflow db init &&
+               airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin || true"
 
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.16.2
@@ -47,7 +63,7 @@ services:
     image: prom/prometheus:v2.54.0
     container_name: prometheus
     ports:
-      - "5912:5912"
+      - "5912:9090" # Host: 5912 -> Container: 9090
     volumes:
       - /home/da25m591/project/config/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
@@ -61,7 +77,7 @@ services:
     image: grafana/grafana:11.1.0
     container_name: grafana
     ports:
-      - "5913:5913"
+      - "5913:3000" # Host: 5913 -> Container: 3000
     volumes:
       - grafana_data:/var/lib/grafana
     networks:
@@ -74,13 +90,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
     environment:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlops_user:mlops_password@postgres:5432/mlops_db
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
     ports:
-      - "6090:8080"
+      - "6090:8080" # Host: 6090 -> Container: 8080
     volumes:
       - /home/da25m591/project/dags:/opt/airflow/dags
       - /var/run/docker.sock:/var/run/docker.sock
@@ -97,6 +115,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
     environment:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlops_user:mlops_password@postgres:5432/mlops_db
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
