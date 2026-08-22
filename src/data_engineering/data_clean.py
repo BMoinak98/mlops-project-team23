@@ -33,11 +33,12 @@ spark = (
     SparkSession.builder
     .appName("TelcoCustomerChurn_data_clean")
     .master("local[*]")
-    .config("spark.driver.memory", "1g")
-    .config("spark.executor.memory", "1g")
+    .config("spark.driver.memory", "16g")        # Expand JVM heap from 1GB to 16GB
+    .config("spark.executor.memory", "16g")      # Expand executor heap
+    .config("spark.driver.maxResultSize", "4g")
+    .config("spark.sql.execution.arrow.pyspark.enabled", "true")
     .getOrCreate()
 )
-
 spark.sparkContext.setLogLevel("WARN")
 
 # ============================================================
