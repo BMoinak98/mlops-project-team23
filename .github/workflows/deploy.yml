@@ -187,7 +187,8 @@ jobs:
             mkdir -p /home/da25m591/project
             cd /home/da25m591/project
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker compose pull airflow-init airflow-webserver airflow-scheduler
+            docker compose pull airflow-init
+            AIRFLOW__CORE__FERNET_KEY="${{ secrets.FERNET_KEY }}" docker compose up airflow-init
             AIRFLOW__CORE__FERNET_KEY="${{ secrets.FERNET_KEY }}" docker compose up -d --no-deps airflow-webserver airflow-scheduler
 
   deploy_infra_mlcode:
@@ -244,7 +245,7 @@ jobs:
       - name: Push ML scripts to server
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.SSlsH_HOST }}
+          host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "src/data_engineering/,src/training/"

@@ -41,10 +41,11 @@ services:
     environment:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlops_user:mlops_password@postgres:5432/mlops_db
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
     networks:
       - mlops-net
-    entrypoint: /bin/bash
     command:
+      - bash
       - -c
       - |
         airflow db migrate && \
