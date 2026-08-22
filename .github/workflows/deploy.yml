@@ -138,6 +138,7 @@ jobs:
           script: |
             mkdir -p /home/da25m591/project
             cd /home/da25m591/project
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose up -d mlflow
 
   deploy_infra_obsv:
