@@ -6,6 +6,11 @@ on:
       - main
   workflow_dispatch:
     inputs:
+      # Server Setup
+      setup_server:
+        description: 'SETUP: Init folders & sync docker-compose.yml'
+        type: boolean
+        default: false
       # Infrastructure Deployments
       deploy_infra_db:
         description: 'INFRA: Deploy PostgreSQL Container'
@@ -46,22 +51,46 @@ on:
         default: false
       # Code Deployments
       deploy_code_ml:
-        description: 'CODE: Sync ML Scripts to Mounts'
+        description: 'CODE: Push ML Scripts to Server'
         type: boolean
         default: false
       deploy_code_dag:
-        description: 'CODE: Sync DAG Files to Mounts'
+        description: 'CODE: Push DAG Files to Server'
         type: boolean
         default: false
       deploy_code_api:
-        description: 'CODE: Sync FastAPI Code to Mounts'
+        description: 'CODE: Push FastAPI Code to Server'
         type: boolean
         default: false
 
 jobs:
-  # --- IMAGE BUILDS (parallel) ---
-  # Each job runs on: push to main  OR  manual dispatch with its checkbox ticked
+  setup_server:
+    if: github.event_name == 'push' || inputs.setup_server == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create project directory structure on server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            mkdir -p /home/da25m591/project/dags
+            mkdir -p /home/da25m591/project/src/data_engineering
+            mkdir -p /home/da25m591/project/src/training
+            mkdir -p /home/da25m591/project/src/api
+            mkdir -p /home/da25m591/project/config
+      - name: Push docker-compose.yml to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "docker-compose.yml"
+          target: "/home/da25m591/project/"
 
+  # --- IMAGE BUILDS (parallel) ---
   build_airflow_image:
     if: github.event_name == 'push' || inputs.build_airflow_image == true
     runs-on: ubuntu-latest
@@ -179,23 +208,6 @@ jobs:
     if: inputs.deploy_infra_api == true
     runs-on: ubuntu-latest
     steps:
-      - name: Create Project Directory
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          password: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            mkdir -p /home/da25m591/project      
-      - uses: actions/checkout@v4
-      - name: Copy Compose File
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          password: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "docker-compose.yml"
-          target: "/home/da25m591/project/"
       - name: Deploy FastAPI Infrastructure
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -213,53 +225,40 @@ jobs:
     if: inputs.deploy_code_dag == true
     runs-on: ubuntu-latest
     steps:
-      - name: Pull Main & Copy DAG Files to Mount Directory
-        uses: appleboy/ssh-action@v1.0.0
+      - name: Push DAG files to server
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            mkdir -p /home/da25m591/project
-            cd /home/da25m591/project
-            git checkout main
-            git pull origin main
-            mkdir -p /home/da25m591/mounts/dags
-            cp -r /home/da25m591/project/dags/* /home/da25m591/mounts/dags/
+          source: "dags/"
+          target: "/home/da25m591/project/dags/"
+          strip_components: 1
 
   deploy_code_ml:
     if: inputs.deploy_code_ml == true
     runs-on: ubuntu-latest
     steps:
-      - name: Pull Main & Copy ML Code to Mount Directory
-        uses: appleboy/ssh-action@v1.0.0
+      - name: Push ML scripts to server
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            mkdir -p /home/da25m591/project
-            cd /home/da25m591/project
-            git checkout main
-            git pull origin main
-            mkdir -p /home/da25m591/mounts/src/data_engineering /home/da25m591/mounts/src/training
-            cp -r /home/da25m591/project/src/data_engineering/* /home/da25m591/mounts/src/data_engineering/
-            cp -r /home/da25m591/project/src/training/* /home/da25m591/mounts/src/training/
+          source: "src/data_engineering/,src/training/"
+          target: "/home/da25m591/project/src/"
+          strip_components: 1
 
   deploy_code_api:
     if: inputs.deploy_code_api == true
     runs-on: ubuntu-latest
     steps:
-      - name: Pull Main & Copy API Code to Mount Directory
-        uses: appleboy/ssh-action@v1.0.0
+      - name: Push API code to server
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            mkdir -p /home/da25m591/project
-            cd /home/da25m591/project
-            git checkout main
-            git pull origin main
-            mkdir -p /home/da25m591/mounts/src/api
-            cp -r /home/da25m591/project/src/api/* /home/da25m591/mounts/src/api/
+          source: "src/api/"
+          target: "/home/da25m591/project/src/api/"
+          strip_components: 2

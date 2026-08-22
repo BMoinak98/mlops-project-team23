@@ -49,7 +49,7 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - /home/da25m591/mounts/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - /home/da25m591/project/config/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -82,10 +82,10 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - /home/da25m591/mounts/dags:/opt/airflow/dags
+      - /home/da25m591/project/dags:/opt/airflow/dags
       - /var/run/docker.sock:/var/run/docker.sock
       - /home/da25m591/data:/opt/data
-      - /home/da25m591/mounts/src:/app/src
+      - /home/da25m591/project/src:/app/src
     networks:
       - mlops-net
     command: webserver
@@ -102,10 +102,10 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
     volumes:
-      - /home/da25m591/mounts/dags:/opt/airflow/dags
+      - /home/da25m591/project/dags:/opt/airflow/dags
       - /var/run/docker.sock:/var/run/docker.sock
       - /home/da25m591/data:/opt/data
-      - /home/da25m591/mounts/src:/app/src
+      - /home/da25m591/project/src:/app/src
     networks:
       - mlops-net
     command: scheduler
@@ -121,7 +121,7 @@ services:
       MLFLOW_TRACKING_URI: http://mlflow:5000
       DATABASE_URL: postgresql://mlops_user:mlops_password@postgres:5432/mlops_db
     volumes:
-      - /home/da25m591/mounts/src/api:/app/api
+      - /home/da25m591/project/src/api:/app/api
     command: uvicorn api.main:app --host 0.0.0.0 --port 5910 --reload
     networks:
       - mlops-net
