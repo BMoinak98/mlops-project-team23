@@ -86,8 +86,8 @@ train_df = train_df.withColumn(
 )
 
 # Use serialized persistence to reduce JVM heap overhead
-train_df = train_df.persist(StorageLevel.MEMORY_AND_DISK_SER)
-test_df = test_df.persist(StorageLevel.MEMORY_AND_DISK_SER)
+train_df = train_df.persist(StorageLevel.MEMORY_AND_DISK)
+test_df = test_df.persist(StorageLevel.MEMORY_AND_DISK)
 train_df.count()
 test_df.count()
 
@@ -165,7 +165,7 @@ rf_pipeline = Pipeline(stages=[indexer, encoder, assembler, rf])
 # 6. EVALUATION FUNCTION
 # ============================================================
 def evaluate_model(model, test_data):
-    predictions = model.transform(test_data).persist(StorageLevel.MEMORY_AND_DISK_SER)
+    predictions = model.transform(test_data).persist(StorageLevel.MEMORY_AND_DISK)
     predictions.count()
 
     auc_evaluator = BinaryClassificationEvaluator(labelCol="label", rawPredictionCol="rawPrediction", metricName="areaUnderROC")
