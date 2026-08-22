@@ -13,6 +13,7 @@ import mlflow.spark
 
 from common_util import load_config
 
+os.environ["PYSPARK_SUBMIT_ARGS"] = "--driver-memory 4g pyspark-shell"
 # ============================================================
 # 1. LOAD CONFIG & PATHS
 # ============================================================
@@ -213,7 +214,7 @@ df = df.withColumn(
 
 df = df.drop("customerID", "Churn")
 
-df = df.localCheckpoint()
+df = df.localCheckpoint(eager=True)
 
 # ============================================================
 # 9. CHECK CLASS DISTRIBUTION
