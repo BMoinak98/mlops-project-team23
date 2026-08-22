@@ -1,3 +1,6 @@
+import os
+os.environ["PYSPARK_SUBMIT_ARGS"] = "--driver-memory 4g pyspark-shell"
+
 from pathlib import Path
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
@@ -68,7 +71,8 @@ import mlflow.spark
 spark = (
     SparkSession.builder
     .appName("TelcoCustomerChurn_train")
-    .config("spark.driver.memory", "2g")
+    .master("local[2]")
+    .config("spark.driver.memory", "4g")
     .config("spark.executor.memory", "2g")
     .config("spark.driver.extraJavaOptions", "-XX:MaxDirectMemorySize=1g")
     .config("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")

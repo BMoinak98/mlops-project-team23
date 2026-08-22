@@ -2,6 +2,8 @@
 # TELCO CUSTOMER CHURN - APACHE SPARK DATA CLEANING
 # ============================================================
 import os
+os.environ["PYSPARK_SUBMIT_ARGS"] = "--driver-memory 4g pyspark-shell"
+
 import shutil
 from pathlib import Path
 from pyspark.sql import SparkSession
@@ -13,7 +15,6 @@ import mlflow.spark
 
 from common_util import load_config
 
-os.environ["PYSPARK_SUBMIT_ARGS"] = "--driver-memory 4g pyspark-shell"
 # ============================================================
 # 1. LOAD CONFIG & PATHS
 # ============================================================
@@ -33,7 +34,8 @@ print(f"Test Data Output: {TEST_PATH}")
 spark = (
     SparkSession.builder
     .appName("TelcoCustomerChurn_data_clean")
-    .config("spark.driver.memory", "2g")
+    .master("local[2]")
+    .config("spark.driver.memory", "4g")
     .config("spark.executor.memory", "2g")
     .config("spark.driver.extraJavaOptions", "-XX:MaxDirectMemorySize=1g")
     .config("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
