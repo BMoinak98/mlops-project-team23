@@ -91,6 +91,7 @@ services:
       - "5913:3000" # Host: 5913 -> Container: 3000
     volumes:
       - grafana_data:/var/lib/grafana
+      - /home/da25m591/project/config/grafana/datasources:/etc/grafana/provisioning/datasources
     networks:
       - mlops-net
 
