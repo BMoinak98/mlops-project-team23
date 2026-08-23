@@ -92,6 +92,7 @@ jobs:
           password: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /home/da25m591/project
+            git init
             dvc config cache.dir /home/da25m591/dvc_remote
             dvc checkout -f data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv.dvc
             cp data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv /home/da25m591/data/raw/
