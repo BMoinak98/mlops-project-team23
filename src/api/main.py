@@ -5,12 +5,15 @@ from pydantic import BaseModel
 
 from src.data_engineering.inference import predict, get_model_info
 
+from prometheus_fastapi_instrumentator import Instrumentator
 
 app = FastAPI(
     title="LoyaltyLensAI - Telco Customer Churn API",
     version="1.0.0"
 )
 
+# Initialize Prometheus instrumentator
+Instrumentator().instrument(app).expose(app)
 
 class CustomerFeatures(BaseModel):
     # Categorical features
