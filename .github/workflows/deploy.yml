@@ -176,6 +176,7 @@ jobs:
             docker exec -u 0 airflow-scheduler chmod -R 777 /mlflow
 
   deploy_infra_api:
+    needs: build_fastapi_image
     if: github.event_name == 'push' || inputs.deploy_infra_api == true
     runs-on: ubuntu-latest
     steps:
