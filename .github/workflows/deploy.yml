@@ -145,17 +145,30 @@ jobs:
             mkdir -p /home/da25m591/project/config
             mkdir -p /home/da25m591/project/logs
             mkdir -p /home/da25m591/data
-
+            mkdir -p /home/da25m591/dvc_remote
       - name: Push docker-compose.yml to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "docker-compose.yml, config/*"
+          source: "docker-compose.yml,config/*,.dvc/*,data/raw/*.dvc"
           target: "/home/da25m591/project/"
 
-# ============================================================
+      - name: Hydrate raw dataset from DVC store on server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/da25m591/project
+            git init
+            dvc config cache.dir /home/da25m591/dvc_remote
+            dvc checkout -f data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv.dvc
+            cp data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv /home/da25m591/data/raw/
+
+
   # --- IMAGE BUILDS (parallel) ---
   # ============================================================
 
