@@ -83,6 +83,7 @@ jobs:
           password: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "docker-compose.yml,config/*,.dvc/*,data/raw/*.dvc"
           target: "/home/da25m591/project/"
+
       - name: Hydrate raw dataset from DVC store on server
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -92,7 +93,7 @@ jobs:
           script: |
             cd /home/da25m591/project
             dvc config cache.dir /home/da25m591/dvc_remote
-            dvc checkout -f --target data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv.dvc
+            dvc checkout -f data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv.dvc
             cp data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv /home/da25m591/data/raw/
 
 
