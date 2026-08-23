@@ -1,101 +1,104 @@
-# Self-Hosted Airflow & Monitoring Pipeline
+# Telco Customer Churn MLOps Platform - Team 23
 
-An automated data pipeline infrastructure running Apache Airflow, PostgreSQL, Prometheus, and Grafana. Deployed automatically to a remote host via GitHub Actions using Docker Compose.
+An end-to-end industrial MLOps platform built to orchestrate, train, track, deploy, and monitor PySpark Machine Learning models for predicting Telco Customer Churn.
 
 ---
 
-## 🏗️ Architecture
+## 👥 Team Members
+
+* **Moinak Bandyopadhyay** (DA25M591)
+* **Rahul Reddy** (DA25M609)
+
+---
+
+## 🏗 System Architecture & Workflow
+
 
 ```
-[ Developer Push ] ──► [ GitHub Repo ]
-                            │
-                            ├──► [ GitHub Actions ]
-                            │          │
-                            │          ├──► Builds App Image ──► [ GHCR.io ]
-                            │          │                              │
-                            │     (SCP & SSH)                         │
-                            ▼          ▼                              │
-             ┌─────────────────────────────────────────────────┐      │
-             │            Target Server (Docker Host)          │      │
-             │                                                 │      │
-             │  ┌─────────────────┐     ┌──────────────────┐   │      │
-             │  │ Airflow Web/Sch │ ──► │ PostgreSQL DB    │   │      │
-             │  └────────┬────────┘     └──────────────────┘   │      │
-             │           │                                     │      │
-             │     (DockerOperator)                            │      │
-             │           │ (Pulls & Runs Container)            │      │
-             │           ▼                                     ▼      │
-             │  ┌─────────────────┐     ┌──────────────────┐   │      │
-             │  │ Custom App Code │ ◄───┴──────────────────┼───┘      │
-             │  └─────────────────┘                        │          │
-             │                          ┌──────────────────┐          │
-             │                          │ Prometheus/Graf. │          │
-             │                          └──────────────────┘          │
-             └─────────────────────────────────────────────────┘
+
+┌─────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│ Data Ingestion  │ ──> │ PySpark ML Pipeline │ ──> │ MLflow Tracking  │
+│  (Parquet/S3)   │     │  (Preprocessing) │     │ (Params/Metrics) │
+└─────────────────┘     └──────────────────┘     └──────────────────┘
+│
+┌─────────────────┐     ┌──────────────────┐              ▼
+│  Prometheus &   │ <── │ FastAPI Serving  │ <── ┌──────────────────┐
+│ Grafana Metrics │     │  (Inference Endpoint)  │ │ MLflow Model     │
+└─────────────────┘     └──────────────────┘     │    Registry      │
+└──────────────────┘
+
+```
+
+1. **Orchestration**: Apache Airflow triggers data preparation and distributed PySpark model training pipelines.
+2. **Data & Training**: PySpark handles class rebalancing, indexing, encoding, and training (Logistic Regression & Random Forest).
+3. **Experiment Tracking**: MLflow logs metrics, parameters, and model artifacts using proxied artifact storage (`--serve-artifacts`).
+4. **Model Serving**: FastAPI loads trained PySpark pipeline models directly from MLflow for real-time REST API inference.
+5. **Observability**: Prometheus captures latency and prediction metrics, visualized in Grafana dashboards.
+6. **CI/CD Pipeline**: GitHub Actions automates container builds (GHCR), remote directory provisioning, and live service deployments.
+
+---
+
+## 📂 Project Structure
+
+```directory
+.
+├── .github/
+│   └── workflows/
+│       └── deploy.yml            # CI/CD deployment pipeline (server setup, image builds, code sync)
+├── config/
+│   ├── config-docker.yml         # Application and ML pipeline configuration
+│   └── prometheus.yml            # Prometheus metric scraper configuration
+├── dags/                         # Airflow DAG workflow definitions
+├── docker/
+│   ├── Dockerfile.airflow        # Custom Airflow runtime with Java and PySpark support
+│   └── Dockerfile.api            # FastAPI container runtime configuration
+├── src/
+│   ├── api/
+│   │   └── main.py               # FastAPI inference application & PySpark pipeline loading
+│   └── data_engineering/
+│       ├── common_util.py        # Config parsing and helper utilities
+│       ├── data_preprocess.py    # Feature engineering and ETL preprocessing
+│       └── model_train.py       # Distributed PySpark ML training & MLflow logging
+├── docker-compose.yml            # Infrastructure service orchestration
+└── README.md
+
 ```
 
 ---
 
-## 🛠️ Stack & Services
+## 🌐 Service Port & Endpoint Matrix
 
-| Service | Port | Description |
-| :--- | :--- | :--- |
-| **Airflow Webserver** | `8080` | Pipeline orchestration UI |
-| **PostgreSQL** | Internal | Airflow metadata database |
-| **Prometheus** | `9090` | Metrics scraping & monitoring |
-| **Grafana** | `3000` | Analytics & monitoring dashboard |
-| **Custom App Image** | Internal | Python worker image pulled dynamically from GHCR |
+| Service | Host Port | Target URL | Description |
+| --- | --- | --- | --- |
+| **FastAPI** | `5910` | [http://164.52.205.84:5910/docs](https://www.google.com/url?sa=E&source=gmail&q=http://164.52.205.84:5910/docs) | Prediction REST API & Interactive Swagger UI |
+| **PostgreSQL** | `5911` | `164.52.205.84:5911` | Metadata backend for Airflow and application store |
+| **Prometheus** | `5912` | [http://164.52.205.84:5912](https://www.google.com/url?sa=E&source=gmail&q=http://164.52.205.84:5912) | Metrics collection engine |
+| **Grafana** | `5913` | [http://164.52.205.84:5913](https://www.google.com/url?sa=E&source=gmail&q=http://164.52.205.84:5913) | Live monitoring dashboards |
+| **Airflow Web** | `6090` | [http://164.52.205.84:6090](https://www.google.com/url?sa=E&source=gmail&q=http://164.52.205.84:6090) | DAG scheduling and pipeline monitoring |
+| **MLflow UI** | `6091` | [http://164.52.205.84:6091](https://www.google.com/url?sa=E&source=gmail&q=http://164.52.205.84:6091) | Experiment tracking and model registry |
 
 ---
 
-## 🚀 One-Time Server Setup
+## 🚀 Deployment Strategy
 
-Execute these commands **once** on your target server before running GitHub Actions:
+Deployment is completely automated using GitHub Actions (`deploy.yml`):
 
-### 1. Install Docker & Docker Compose
+* **Server Setup (`setup_server`)**: Connects to the host over SSH, creates target directory trees (`/home/da25m591/project/...`), and syncs deployment configs (`docker-compose.yml`, `config/*`).
+* **Container Image Builds (`build_*_image`)**: Builds custom Docker images for Airflow and FastAPI, pushing them to GitHub Container Registry (`ghcr.io`).
+* **Infrastructure Deployments (`deploy_infra_*`)**: Spins up isolated container instances via Docker Compose for database, MLflow, monitoring, Airflow runtimes, and FastAPI.
+* **Code Synchronization (`deploy_code_*`)**: Pushes updated DAGs, ML scripts, and FastAPI code directly to server mounts without full image re-builds.
+
+---
+
+## 🛠 Quickstart (Local Development)
+
 ```bash
-sudo apt update
-sudo apt install -y docker.io docker-compose-v2
-```
+# Clone repository
+git clone [https://github.com/BMoinak98/mlops-project-team23.git](https://github.com/BMoinak98/mlops-project-team23.git)
+cd mlops-project-team23
 
-### 2. Configure Permissions
-Grant your SSH deployment user access to run Docker without `sudo`:
-```bash
-sudo usermod -aG docker $USER
-newgrp docker
-```
+# Start all infrastructure containers
+docker compose up -d
 
-### 3. Prepare Target Directory
-```bash
-sudo mkdir -p /opt/my-pipeline
-sudo chown -R $USER:$USER /opt/my-pipeline
-```
-
----
-
-## 🔐 Required GitHub Secrets
-
-Add the following credentials in your GitHub Repository under **Settings > Secrets and variables > Actions**:
-
-*   `SSH_HOST` — Public IP or domain name of your server.
-*   `SSH_USER` — Username used for SSH access.
-*   `SSH_PRIVATE_KEY` — Private key corresponding to `~/.ssh/authorized_keys` on the server.
-
----
-
-## 🔄 Deployment Process (CI/CD)
-
-Every time code is pushed to the `main` branch:
-
-1. **Build & Package:** GitHub Actions builds `app/Dockerfile` and pushes the resulting image to `ghcr.io`.
-2. **File Sync:** Configuration files (`docker-compose.yml`, `prometheus.yml`) and DAG files (`dags/`) are copied to `/opt/my-pipeline/` on the server via SCP.
-3. **Container Launch:** GitHub Actions executes `docker compose up -d` over SSH to update all running services.
-4. **Execution:** Airflow detects the DAG file and uses the server's Docker engine to pull and execute the application container from GHCR.
-
----
-
-## 🌐 Default Access URLs
-
-*   **Airflow Webserver:** `http://<YOUR_SERVER_IP>:8080`
-*   **Grafana Dashboard:** `http://<YOUR_SERVER_IP>:3000` *(Default Login: `admin` / `admin`)*
-*   **Prometheus Metrics:** `http://<YOUR_SERVER_IP>:9090`
+# Verify container statuses
+docker compose ps
