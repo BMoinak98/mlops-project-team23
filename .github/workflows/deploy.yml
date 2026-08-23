@@ -434,3 +434,32 @@ jobs:
           password: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "docker-compose.yml"
           target: "/home/da25m591/project/"
+
+  # --- RESTART FASTAPI AFTER CODE DEPLOYMENT ---
+  restart_fastapi:
+    needs:
+      - changes
+      - deploy_code_api
+      - deploy_code_ml
+      - deploy_code_dag
+
+    if: |
+      always() &&
+      (
+        needs.changes.outputs.api_code == 'true' ||
+        needs.changes.outputs.ml_code == 'true' ||
+        needs.changes.outputs.config == 'true'
+      )
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Restart FastAPI
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/da25m591/project
+            docker compose restart fastapi
