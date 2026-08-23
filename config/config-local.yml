@@ -1,6 +1,7 @@
 # ============================================================
 # Local Execution Configuration
 # ============================================================
+prefix: "/storage/data/"
 hadoop_home: "C:\\hadoop"
 data_dir: "data"
 raw_data_path: "data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv"
@@ -8,6 +9,6 @@ train_data_path: "data/processed/train"
 test_data_path: "data/processed/test"
 
 mlflow:
-  tracking_uri: "http://localhost:6091"
-  experiment_name: "Telco Customer Churn - Spark ML"
-  finetune_experiment_name: "Telco Customer Churn - Spark Ray Tune"
+  tracking_uri: ""
+  experiment_name: "LoyaltyLensAI - Telco Customer Churn - Spark ML"
+  finetune_experiment_name: "LoyaltyLensAI - Telco Customer Churn - Spark Ray Tune"

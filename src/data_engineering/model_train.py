@@ -206,6 +206,10 @@ with mlflow.start_run(run_name="LogisticRegression"):
     metrics_lr = evaluate_model(model_lr, test_df)
 
     mlflow.log_param("model", "LogisticRegression")
+    mlflow.log_param(
+        "artifact_path",
+        "logistic-regression-model"
+    )
     mlflow.log_param("maxIter", 100)
     mlflow.log_param("regParam", 0.01)
     mlflow.log_metrics(metrics_lr)
@@ -226,6 +230,10 @@ with mlflow.start_run(run_name="RandomForest"):
     metrics_rf = evaluate_model(model_rf, test_df)
 
     mlflow.log_param("model", "RandomForest")
+    mlflow.log_param(
+        "artifact_path",
+        "random-forest-model"
+    )
     mlflow.log_param("numTrees", 100)
     mlflow.log_param("maxDepth", 8)
     mlflow.log_metrics(metrics_rf)

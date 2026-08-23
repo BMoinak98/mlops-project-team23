@@ -1,6 +1,7 @@
 # ============================================================
 # Docker Execution Configuration
 # ============================================================
+prefix: ""
 data_dir: "/opt/data"
 raw_data_path: "/opt/data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv"
 train_data_path: "/opt/data/processed/train"
