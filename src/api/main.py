@@ -13,7 +13,7 @@ app = FastAPI(
 )
 
 # Initialize Prometheus instrumentator
-Instrumentator().instrument(app).expose(app)
+Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=True)
 
 class CustomerFeatures(BaseModel):
     # Categorical features
