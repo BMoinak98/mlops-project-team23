@@ -80,7 +80,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "docker-compose.yml,config/config-docker.yml"
+          source: "docker-compose.yml,config/*"
           target: "/home/da25m591/project/"
 
   # --- IMAGE BUILDS (parallel) ---
