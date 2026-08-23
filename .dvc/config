@@ -1,0 +1,5 @@
+[core]
+    remote = server_remote
+['remote "server_remote"']
+    url = ssh://da25m591@164.52.205.84/home/da25m591/dvc_remote
+    user = da25m591
