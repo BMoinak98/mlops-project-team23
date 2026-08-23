@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+
   workflow_dispatch:
     inputs:
       # Server Setup
@@ -11,56 +12,126 @@ on:
         description: 'SETUP: Init folders & sync docker-compose.yml'
         type: boolean
         default: false
+
       # Infrastructure Deployments
       deploy_infra_db:
         description: 'INFRA: Deploy PostgreSQL Container'
         type: boolean
         default: false
+
       deploy_infra_mlflow:
         description: 'INFRA: Deploy MLflow Container'
         type: boolean
         default: false
+
       deploy_infra_obsv:
         description: 'INFRA: Deploy Grafana & Prometheus'
         type: boolean
         default: false
+
       deploy_infra_runtime:
         description: 'INFRA: Deploy Airflow Runtime Containers'
         type: boolean
         default: false
+
       deploy_infra_api:
         description: 'INFRA: Deploy FastAPI Container'
         type: boolean
         default: false
+
       # Image Builds
       build_airflow_image:
         description: 'BUILD: Build & Push Airflow Image'
         type: boolean
         default: false
+
       build_fastapi_image:
         description: 'BUILD: Build & Push FastAPI Image'
         type: boolean
         default: false
+
       # Code Deployments
       deploy_code_ml:
         description: 'CODE: Push ML Scripts to Server'
         type: boolean
         default: false
+
       deploy_code_dag:
         description: 'CODE: Push DAG Files to Server'
         type: boolean
         default: false
+
       deploy_code_api:
         description: 'CODE: Push FastAPI Code to Server'
         type: boolean
         default: false
 
+
 jobs:
-  setup_server:
-    if: github.event_name == 'push' || inputs.setup_server == true
+
+  # ============================================================
+  # DETECT CHANGES
+  # ============================================================
+
+  changes:
     runs-on: ubuntu-latest
+
+    outputs:
+      api_code: ${{ steps.filter.outputs.api_code }}
+      ml_code: ${{ steps.filter.outputs.ml_code }}
+      dag_code: ${{ steps.filter.outputs.dag_code }}
+      config: ${{ steps.filter.outputs.config }}
+      compose: ${{ steps.filter.outputs.compose }}
+      api_image: ${{ steps.filter.outputs.api_image }}
+      airflow_image: ${{ steps.filter.outputs.airflow_image }}
+
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check changed files
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+
+            api_code:
+              - 'src/api/**'
+
+            ml_code:
+              - 'src/data_engineering/**'
+
+            dag_code:
+              - 'dags/**'
+
+            config:
+              - 'config/**'
+
+            compose:
+              - 'docker-compose.yml'
+
+            api_image:
+              - 'docker/Dockerfile.api'
+              - 'requirements/api-requirements.txt'
+
+            airflow_image:
+              - 'docker/Dockerfile.airflow'
+              - 'requirements/airflow-requirements.txt'
+
+
+  # ============================================================
+  # SERVER SETUP
+  # ============================================================
+
+  setup_server:
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      inputs.setup_server == true
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Create project directory structure on server
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -74,44 +145,78 @@ jobs:
             mkdir -p /home/da25m591/project/config
             mkdir -p /home/da25m591/project/logs
             mkdir -p /home/da25m591/data
+
       - name: Push docker-compose.yml to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "docker-compose.yml,config/*"
+          source: "docker-compose.yml, config/*"
           target: "/home/da25m591/project/"
 
+# ============================================================
   # --- IMAGE BUILDS (parallel) ---
+  # ============================================================
+
   build_airflow_image:
-    if: github.event_name == 'push' || inputs.build_airflow_image == true
+    needs: changes
+
+    if: |
+      inputs.build_airflow_image == true ||
+      needs.changes.outputs.airflow_image == 'true'
+
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
       - name: Build & Push Airflow Image
         run: |
-          docker build -t ghcr.io/bmoinak98/mlops-project-team23/airflow:latest -f docker/Dockerfile.airflow .
-          docker push ghcr.io/bmoinak98/mlops-project-team23/airflow:latest
+          docker build \
+            -t ghcr.io/bmoinak98/mlops-project-team23/airflow:latest \
+            -f docker/Dockerfile.airflow .
+
+          docker push \
+            ghcr.io/bmoinak98/mlops-project-team23/airflow:latest
+
 
   build_fastapi_image:
-    if: github.event_name == 'push' || inputs.build_fastapi_image == true
+    needs: changes
+
+    if: |
+      inputs.build_fastapi_image == true ||
+      needs.changes.outputs.api_image == 'true'
+
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
       - name: Build & Push FastAPI Image
         run: |
-          docker build -t ghcr.io/bmoinak98/mlops-project-team23/fastapi:latest -f docker/Dockerfile.api .
-          docker push ghcr.io/bmoinak98/mlops-project-team23/fastapi:latest
+          docker build \
+            -t ghcr.io/bmoinak98/mlops-project-team23/fastapi:latest \
+            -f docker/Dockerfile.api .
 
-  # --- INFRASTRUCTURE MANUAL JOBS ---
+          docker push \
+            ghcr.io/bmoinak98/mlops-project-team23/fastapi:latest
+
+
+  # ============================================================
+  # INFRASTRUCTURE
+  # ============================================================
+
   deploy_infra_db:
     if: inputs.deploy_infra_db == true
     runs-on: ubuntu-latest
+
     steps:
       - name: Deploy Postgres
         uses: appleboy/ssh-action@v1.0.0
@@ -124,9 +229,11 @@ jobs:
             cd /home/da25m591/project
             docker compose up -d postgres
 
+
   deploy_infra_mlflow:
     if: inputs.deploy_infra_mlflow == true
     runs-on: ubuntu-latest
+
     steps:
       - name: Deploy MLflow
         uses: appleboy/ssh-action@v1.0.0
@@ -140,9 +247,11 @@ jobs:
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose up -d mlflow
 
+
   deploy_infra_obsv:
     if: inputs.deploy_infra_obsv == true
     runs-on: ubuntu-latest
+
     steps:
       - name: Deploy Observability
         uses: appleboy/ssh-action@v1.0.0
@@ -155,9 +264,11 @@ jobs:
             cd /home/da25m591/project
             docker compose up -d prometheus grafana
 
+
   deploy_infra_runtime:
     if: inputs.deploy_infra_runtime == true
     runs-on: ubuntu-latest
+
     steps:
       - name: Deploy Airflow Infrastructure
         uses: appleboy/ssh-action@v1.0.0
@@ -168,16 +279,24 @@ jobs:
           script: |
             mkdir -p /home/da25m591/project
             cd /home/da25m591/project
+
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
             docker compose pull airflow-init
+
             AIRFLOW__CORE__FERNET_KEY="${{ secrets.FERNET_KEY }}" docker compose up airflow-init
-            AIRFLOW__CORE__FERNET_KEY="${{ secrets.FERNET_KEY }}" docker compose up -d --no-deps airflow-webserver airflow-scheduler
+
+            AIRFLOW__CORE__FERNET_KEY="${{ secrets.FERNET_KEY }}" \
+              docker compose up -d --no-deps airflow-webserver airflow-scheduler
+
             docker exec -u 0 airflow-scheduler mkdir -p /mlflow
             docker exec -u 0 airflow-scheduler chmod -R 777 /mlflow
+
 
   deploy_infra_api:
     if: inputs.deploy_infra_api == true
     runs-on: ubuntu-latest
+
     steps:
       - name: Deploy FastAPI Infrastructure
         uses: appleboy/ssh-action@v1.0.0
@@ -187,16 +306,29 @@ jobs:
           password: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /home/da25m591/project
+
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
             docker compose pull fastapi
             docker compose up -d --no-deps fastapi
 
-  # --- CODE SYNC MANUAL JOBS ---
+
+  # ============================================================
+  # CODE SYNC
+  # ============================================================
+
   deploy_code_dag:
-    if: inputs.deploy_code_dag == true
+    needs: changes
+
+    if: |
+      inputs.deploy_code_dag == true ||
+      needs.changes.outputs.dag_code == 'true'
+
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Push DAG files to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -207,11 +339,19 @@ jobs:
           target: "/home/da25m591/project/dags/"
           strip_components: 1
 
+
   deploy_code_ml:
-    if: inputs.deploy_code_ml == true
+    needs: changes
+
+    if: |
+      inputs.deploy_code_ml == true ||
+      needs.changes.outputs.ml_code == 'true'
+
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Push ML scripts to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -222,11 +362,19 @@ jobs:
           target: "/home/da25m591/project/src/data_engineering/"
           strip_components: 2
 
+
   deploy_code_api:
-    if: inputs.deploy_code_api == true
+    needs: changes
+
+    if: |
+      inputs.deploy_code_api == true ||
+      needs.changes.outputs.api_code == 'true'
+
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Push API code to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -236,3 +384,53 @@ jobs:
           source: "src/api/"
           target: "/home/da25m591/project/src/api/"
           strip_components: 2
+
+
+  # ============================================================
+  # CONFIG DEPLOYMENT
+  # ============================================================
+
+  deploy_config:
+    needs: changes
+
+    if: |
+      needs.changes.outputs.config == 'true'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push config files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "config/*"
+          target: "/home/da25m591/project/config/"
+
+
+  # ============================================================
+  # DOCKER COMPOSE DEPLOYMENT
+  # ============================================================
+
+  deploy_compose:
+    needs: changes
+
+    if: |
+      needs.changes.outputs.compose == 'true'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push docker-compose.yml
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "docker-compose.yml"
+          target: "/home/da25m591/project/"
