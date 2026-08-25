@@ -99,6 +99,13 @@ def find_best_model():
         order_by=["metrics.roc_auc DESC"],
         max_results=100,
     )
+    print(runs[["run_id", "status", "metrics.roc_auc"]].to_string(index=False))
+    run = mlflow.get_run("248859c8f43d4caabcc5d529aa506fe8")
+
+    print("run_id:", run.info.run_id)
+    print("status:", run.info.status)
+    print("lifecycle_stage:", run.info.lifecycle_stage)
+    print("artifact_uri:", run.info.artifact_uri)
 
     if runs.empty:
         raise RuntimeError(
