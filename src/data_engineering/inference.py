@@ -95,7 +95,7 @@ def find_best_model():
 
     runs = mlflow.search_runs(
         experiment_ids=[experiment.experiment_id],
-        filter_string="status = 'FINISHED'",
+        filter_string="attributes.status = 'FINISHED'",
         order_by=["metrics.roc_auc DESC"],
         max_results=100,
     )
