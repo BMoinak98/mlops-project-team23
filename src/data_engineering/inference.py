@@ -95,8 +95,9 @@ def find_best_model():
 
     runs = mlflow.search_runs(
         experiment_ids=[experiment.experiment_id],
+        filter_string="status = 'FINISHED'",
         order_by=["metrics.roc_auc DESC"],
-        max_results=100
+        max_results=100,
     )
 
     if runs.empty:
