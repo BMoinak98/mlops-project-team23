@@ -42,36 +42,39 @@ class CustomerFeatures(BaseModel):
     service_count: Optional[float] = 2
     avg_monthly_spend: Optional[float] = 50.0
 
-
 @app.get("/")
 def read_root():
-    """
-    Health check + example inference.
-
-    This invokes the inference module as requested.
-    """
-
-    sample_customer = CustomerFeatures()
-
-    try:
-        prediction = predict(
-            sample_customer.model_dump()
-        )
-
-        return {
-            "message": (
-                "Hello World! "
-                "This is team 23. "
-                "Code update without docker interference"
-            ),
-            "inference": prediction
-        }
-
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Inference failed: {str(exc)}"
-        )
+    return {
+        "message": "LoyaltyLensAI API is running",
+    }
+# def read_root():
+#     """
+#     Health check + example inference.
+#
+#     This invokes the inference module as requested.
+#     """
+#
+#     sample_customer = CustomerFeatures()
+#
+#     try:
+#         prediction = predict(
+#             sample_customer.model_dump()
+#         )
+#
+#         return {
+#             "message": (
+#                 "Hello World! "
+#                 "This is team 23. "
+#                 "Code update without docker interference"
+#             ),
+#             "inference": prediction
+#         }
+#
+#     except Exception as exc:
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"Inference failed: {str(exc)}"
+#         )
 # sample request
 '''
 {

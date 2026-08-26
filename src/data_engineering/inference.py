@@ -35,17 +35,18 @@ _spark = None
 _model = None
 _model_info = None
 
-
 def get_spark() -> SparkSession:
     global _spark
-
     if _spark is None:
         _spark = (
             SparkSession.builder
             .appName("TelcoCustomerChurn_Inference")
-            .master("local[2]")
-            .config("spark.driver.memory", "2g")
-            .config("spark.driver.memoryOverhead", "512m")
+            .master("local[1]")
+            .config("spark.driver.memory", "1g")
+            .config("spark.driver.memoryOverhead", "256m")
+            .config("spark.ui.enabled", "false")
+            .config("spark.sql.shuffle.partitions", "1")
+            .config("spark.default.parallelism", "1")
             .config("spark.network.timeout", "800s")
             .config("spark.executor.heartbeatInterval", "60s")
             .config("spark.python.worker.reuse", "true")
